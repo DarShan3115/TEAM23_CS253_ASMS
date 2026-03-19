@@ -1,0 +1,14 @@
+cat <<EOF > .gitignore
+# Dependencies
+node_modules/
+.env
+__pycache__/
+*.log
+
+# Build outputs
+dist/
+build/
+
+# OS files
+.DS_Store
+EOF
