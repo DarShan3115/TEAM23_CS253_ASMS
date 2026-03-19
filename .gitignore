@@ -1,14 +1,58 @@
-cat <<EOF > .gitignore
-# Dependencies
+# --- ASMS Project Root ---
 node_modules/
 .env
-__pycache__/
-*.log
-
-# Build outputs
+.env.*
+!.env.example
 dist/
 build/
+*.log
 
-# OS files
+# --- Frontend (React 19 / Vite) ---
+client/node_modules/
+client/dist/
+client/.eslintcache
+client/.pnpm-debug.log*
+
+# --- Backend: Node.js (Auth Service) ---
+server/auth-service/node_modules/
+server/auth-service/npm-debug.log*
+
+# --- Backend: Python (Academic/Analytics Services) ---
+# Ignore virtual environments and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Backend: Go (Productivity Service) ---
+server/productivity-service/bin/
+server/productivity-service/obj/
+
+# --- Database ---
+*.db
+*.sqlite
+database/postgres/data/
+
+# --- IDEs & System Files ---
+# We ignore personal IDE settings but keep shared workspace configs
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
 .DS_Store
-EOF
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
