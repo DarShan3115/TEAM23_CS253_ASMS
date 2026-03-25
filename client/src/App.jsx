@@ -31,7 +31,6 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          {/* Add more protected routes here */}
         </Route>
 
         {/* Redirects & fallback */}
