@@ -7,7 +7,10 @@ import DashboardPage from './pages/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import useAuthStore from './store/authStore';
+<<<<<<< HEAD
 import RecentResultsTable from "./components/organisms/RecentResultsTable";
+=======
+>>>>>>> 8cd2c7e252835807470fb00249b02a3b8b8c44da
 
 export default function App() {
   const { token, fetchMe } = useAuthStore();
@@ -35,7 +38,11 @@ export default function App() {
         </Route>
 
         {/* Redirects & fallback */}
+<<<<<<< HEAD
         <Route path="/" element={<Navigate to="/dashboard" />} />
+=======
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+>>>>>>> 8cd2c7e252835807470fb00249b02a3b8b8c44da
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

@@ -1,0 +1,67 @@
+services:
+  # ── Database ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: asms_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Auth Service (Node.js / Express) ─────────────────────────────────────
+  auth-service:
+    build: ./server/auth-service
+    ports:
+      - "5001:5001"
+    env_file: ./server/auth-service/.env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Academic Service (Node.js / Express) ─────────────────────────────────
+  academic-service:
+    build: ./server/academic-service
+    ports:
+      - "8000:8000"
+    env_file: ./server/academic-service/.env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Analytics Service (Node.js / Express) ────────────────────────────────
+  analytics-service:
+    build: ./server/analytics-service
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Productivity Service (Node.js / Express) ──────────────────────────────
+  productivity-service:
+    build: ./server/productivity-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Frontend (React / Vite) ──────────────────────────────────────────────
+  frontend:
+    build: ./client
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-service
+
+volumes:
+  pgdata:
