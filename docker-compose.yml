@@ -27,7 +27,7 @@ services:
       db:
         condition: service_healthy
 
-  # ── Academic Service (Python / Django) ───────────────────────────────────
+  # ── Academic Service (Node.js / Express) ─────────────────────────────────
   academic-service:
     build: ./server/academic-service
     ports:
@@ -37,18 +37,16 @@ services:
       db:
         condition: service_healthy
 
-  # ── Analytics Service (Python / FastAPI) ─────────────────────────────────
+  # ── Analytics Service (Node.js / Express) ────────────────────────────────
   analytics-service:
-    build:
-      context: ./server/analytics-service
-      dockerfile: Dockerfile
+    build: ./server/analytics-service
     ports:
       - "8001:8001"
     depends_on:
       db:
         condition: service_healthy
 
-  # ── Productivity Service (Go / Gin) ──────────────────────────────────────
+  # ── Productivity Service (Node.js / Express) ──────────────────────────────
   productivity-service:
     build: ./server/productivity-service
     ports:
