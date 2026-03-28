@@ -1,37 +1,29 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-
 const authRoutes = require('./routes/auth.routes');
-const usersRoutes = require('./routes/users.routes');
+const userRoutes = require('./routes/users.routes');
+const adminRoutes = require('./routes/admin.routes');
+require('./config/db'); // Initialize DB connection
 
 const app = express();
-const PORT = process.env.PORT || 5001;
 
-// ── Middleware ─────────────────────────────────────────────────────────────
-app.use(helmet());
+// Middleware
 app.use(cors());
-app.use(morgan('dev'));
 app.use(express.json());
 
-// ── Routes ────────────────────────────────────────────────────────────────
+// Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
-// ── Health Check ──────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'auth-service', timestamp: new Date().toISOString() });
+// Basic Health Check
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', service: 'auth-service' });
 });
 
-// ── Error Handler ─────────────────────────────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong.' });
-});
-
-// ── Start ─────────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
-  console.log(`Auth Service running on http://localhost:${PORT}`);
+  console.log(`Auth service running on port ${PORT}`);
 });
+
+module.exports = app;
