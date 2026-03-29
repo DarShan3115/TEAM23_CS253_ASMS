@@ -1,0 +1,13 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "tailwindCSS.includeLanguages": {
+    "plaintext": "ts",
+    "html": "html",
+    "css": "css"
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+    "python.analysis.extraPaths": ["./server/academic-service"],
+    "python.analysis.importFormat": "relative"
+}

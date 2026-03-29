@@ -1,0 +1,75 @@
+package handlers
+
+import (
+	"net/http"
+	"github.com/gin-gonic/gin"
+	"github.com/DarShan3115/TEAM23_CS253_ASMS/server/productivity-service/models"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type SubmissionHandler struct {
+	DB *gorm.DB
+}
+
+func NewSubmissionHandler(db *gorm.DB) *SubmissionHandler {
+	return &SubmissionHandler{DB: db}
+}
+
+// SubmitTask handles the POST request from the frontend
+func (h *SubmissionHandler) SubmitTask(c *gin.Context) {
+	var input struct {
+		AssignmentID string `json:"assignment_id" binding:"required"`
+		Content      string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+		return
+	}
+
+	// Extract Student ID from header (sent by our React frontend)
+	studentIDStr := c.GetHeader("x-user-id")
+	if studentIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User identification missing"})
+		return
+	}
+
+	studentID, _ := uuid.Parse(studentIDStr)
+	assignmentID, _ := uuid.Parse(input.AssignmentID)
+
+	submission := models.Submission{
+		ID:           uuid.New(),
+		AssignmentID: assignmentID,
+		StudentID:    studentID,
+		Content:      input.Content,
+	}
+
+	// Save to database
+	if err := h.DB.Create(&submission).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save submission"})
+		return
+	}
+
+	// Logic to update the assignment status could go here
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Submission received successfully",
+		"id":      submission.ID,
+	})
+}
+
+// GetSubmissionByTask allows a student to see what they submitted
+func (h *SubmissionHandler) GetSubmissionByTask(c *gin.Context) {
+	assignmentID := c.Param("id")
+	studentID := c.GetHeader("x-user-id")
+
+	var submission models.Submission
+	result := h.DB.Where("assignment_id = ? AND student_id = ?", assignmentID, studentID).First(&submission)
+
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No submission found for this task"})
+		return
+	}
+
+	c.JSON(http.StatusOK, submission)
+}

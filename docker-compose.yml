@@ -1,0 +1,84 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=asms_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d asms_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build: ./server/auth-service
+    environment:
+      - PORT=5001
+      - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
+      - JWT_SECRET=generate_a_long_random_string_here
+    ports:
+      - "5001:5001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  academic-service:
+    build: ./server/academic-service
+    environment:
+      - DB_NAME=asms_db
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_HOST=db
+      - DB_PORT=5432
+      - SECRET_KEY=django-insecure-replace-this-with-a-real-key
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+
+  productivity-service:
+    build: ./server/productivity-service
+    environment:
+      - PORT=8080
+      - GIN_MODE=debug
+      - DATABASE_URL=postgres://postgres:password@db:5432/asms_db?sslmode=disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  analytics-service:
+    build: ./server/analytics-service
+    environment:
+      - PORT=8001
+      - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
+      - ACADEMIC_SERVICE_URL=http://academic-service:8000
+      - AUTH_SERVICE_URL=http://auth-service:5001
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8001
+
+  frontend:
+    build: ./client
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-service
+      - academic-service
+      - productivity-service
+
+volumes:
+  postgres_data:
