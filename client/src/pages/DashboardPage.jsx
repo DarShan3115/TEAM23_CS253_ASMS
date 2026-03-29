@@ -1,3 +1,15 @@
+<<<<<<< HEAD
+import React from "react";
+import RecentResultsTable from "../components/organisms/RecentResultsTable";
+
+export default function DashboardPage() {
+  return (
+    <div>
+      <RecentResultsTable />
+    </div>
+  );
+}
+=======
 import { GraduationCap, BookOpen, Shield, ClipboardList, Users, BarChart3 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -97,3 +109,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+>>>>>>> 8cd2c7e252835807470fb00249b02a3b8b8c44da
