@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  HashRouter as Router, 
+  BrowserRouter as Router,  // ✅ CHANGED FROM HashRouter
   Routes, 
   Route, 
   Navigate,
@@ -23,12 +23,6 @@ import {
 import axios from 'axios';
 import { create } from 'zustand';
 
-/**
- * ASMS MASTER ORCHESTRATOR
- * Consolidating your provided page logic into a resilient, production-ready shell.
- * Use this as your client/src/App.jsx for the Canvas environment.
- */
-
 // ============================================================================
 // --- RESILIENT HELPERS ---
 // ============================================================================
@@ -45,7 +39,7 @@ const getSafeStorage = (key) => {
 };
 
 // ============================================================================
-// --- GLOBAL STORE (client/src/store/authStore.js) ---
+// --- GLOBAL STORE ---
 // ============================================================================
 
 const useAuthStore = create((set) => ({
@@ -57,7 +51,6 @@ const useAuthStore = create((set) => ({
 
   login: async (email, password) => {
     set({ loading: true, error: null });
-    // Simulation logic to match your provided auth handlers
     return new Promise((resolve) => {
       setTimeout(() => {
         const role = email.includes('admin') ? 'admin' : email.includes('faculty') ? 'faculty' : 'student';
@@ -85,7 +78,7 @@ const useAuthStore = create((set) => ({
 }));
 
 // ============================================================================
-// --- SHARED UI COMPONENTS (Organisms) ---
+// --- SHARED UI COMPONENTS ---
 // ============================================================================
 
 const ProtectedRoute = ({ children, role }) => {
@@ -155,16 +148,40 @@ const UserTable = ({ users = [], onToggle }) => (
 );
 
 // ============================================================================
-// --- INDIVIDUAL PAGE VIEWS (Integrated from your files) ---
+// --- PAGE COMPONENTS ---
 // ============================================================================
 
 const DashboardPage = () => {
   const { user } = useAuthStore();
   const role = user?.role || 'student';
   const roleConfig = {
-    student: { greeting: 'Student Dashboard', icon: GraduationCap, stats: [{ label: 'Enrolled', val: '4', color: 'text-blue-500' }, { label: 'Tasks', val: '3', color: 'text-orange-500' }, { label: 'Attendance', val: '94%', color: 'text-green-500' }] },
-    faculty: { greeting: 'Professor Dashboard', icon: BookOpen, stats: [{ label: 'My Courses', val: '2', color: 'text-emerald-500' }, { label: 'Grading', val: '12', color: 'text-yellow-500' }, { label: 'Students', val: '84', color: 'text-blue-500' }] },
-    admin: { greeting: 'Admin Dashboard', icon: Shield, stats: [{ label: 'Total Users', val: '1.2k', color: 'text-amber-500' }, { label: 'Node Health', val: 'Optimal', color: 'text-green-500' }, { label: 'Uptime', val: '99.9%', color: 'text-blue-500' }] }
+    student: { 
+      greeting: 'Student Dashboard', 
+      icon: GraduationCap, 
+      stats: [
+        { label: 'Enrolled', val: '4', color: 'text-blue-500' }, 
+        { label: 'Tasks', val: '3', color: 'text-orange-500' }, 
+        { label: 'Attendance', val: '94%', color: 'text-green-500' }
+      ] 
+    },
+    faculty: { 
+      greeting: 'Professor Dashboard', 
+      icon: BookOpen, 
+      stats: [
+        { label: 'My Courses', val: '2', color: 'text-emerald-500' }, 
+        { label: 'Grading', val: '12', color: 'text-yellow-500' }, 
+        { label: 'Students', val: '84', color: 'text-blue-500' }
+      ] 
+    },
+    admin: { 
+      greeting: 'Admin Dashboard', 
+      icon: Shield, 
+      stats: [
+        { label: 'Total Users', val: '1.2k', color: 'text-amber-500' }, 
+        { label: 'Node Health', val: 'Optimal', color: 'text-green-500' }, 
+        { label: 'Uptime', val: '99.9%', color: 'text-blue-500' }
+      ] 
+    }
   };
   const config = roleConfig[role];
 
@@ -224,34 +241,6 @@ const DiscussionPortalPage = () => (
   </div>
 );
 
-const FacultyDashboard = () => {
-  const navigate = useNavigate();
-  return (
-    <div className="space-y-8 animate-in fade-in">
-      <h1 className="text-3xl font-black text-white">Faculty Hub</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-         <div className="bg-gray-800/40 border border-gray-700 p-6 rounded-3xl">
-            <h3 className="font-bold text-white text-lg">Introduction to Algorithms</h3>
-            <p className="text-xs text-gray-500 mt-1">CS101 • 42 Students</p>
-            <button onClick={() => navigate('/faculty/grading/cs101')} className="block w-full mt-6 py-3 bg-white text-gray-950 text-center rounded-xl text-xs font-black uppercase">Open Grading Room</button>
-         </div>
-      </div>
-    </div>
-  );
-};
-
-const FacultyGradingPage = () => {
-  const { assignmentId } = useParams();
-  const navigate = useNavigate();
-  return (
-    <div className="space-y-8">
-      <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-white flex items-center gap-2 text-xs font-black uppercase"><ChevronLeft size={16}/> Back</button>
-      <h1 className="text-3xl font-black text-white">Grading: {assignmentId?.toUpperCase()}</h1>
-      <div className="p-20 text-center border-2 border-dashed border-gray-800 rounded-3xl text-gray-700 italic">Connecting to Productivity Service Submission Node...</div>
-    </div>
-  );
-};
-
 const AdminControlPanel = () => {
   const [users] = useState([{ id: '1', first_name: 'Darshan', last_name: 'Tandel', email: 'admin@asms.edu', role: 'admin', is_active: true }]);
   return (
@@ -298,7 +287,7 @@ const RegisterPage = () => (
 );
 
 // ============================================================================
-// --- MASTER APP SHELL ---
+// --- LAYOUT COMPONENT ---
 // ============================================================================
 
 const Layout = ({ children }) => {
@@ -307,8 +296,17 @@ const Layout = ({ children }) => {
   const role = (user?.role || 'student').toLowerCase();
   
   const menu = {
-    student: [{ path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, { path: '/courses', label: 'Catalog', icon: BookMarked }, { path: '/assignments', label: 'Tasks', icon: ClipboardList }, { path: '/progress', label: 'Standing', icon: BarChart3 }, { path: '/discussions', label: 'Portal', icon: MessageSquare }],
-    faculty: [{ path: '/dashboard', label: 'Hub', icon: LayoutDashboard }, { path: '/discussions', label: 'Portal', icon: MessageSquare }],
+    student: [
+      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, 
+      { path: '/courses', label: 'Catalog', icon: BookMarked }, 
+      { path: '/assignments', label: 'Tasks', icon: ClipboardList }, 
+      { path: '/progress', label: 'Standing', icon: BarChart3 }, 
+      { path: '/discussions', label: 'Portal', icon: MessageSquare }
+    ],
+    faculty: [
+      { path: '/dashboard', label: 'Hub', icon: LayoutDashboard }, 
+      { path: '/discussions', label: 'Portal', icon: MessageSquare }
+    ],
     admin: [{ path: '/admin/console', label: 'Control', icon: ShieldAlert }]
   }[role] || [];
 
@@ -341,6 +339,10 @@ const Layout = ({ children }) => {
   );
 };
 
+// ============================================================================
+// --- APP ROOT ---
+// ============================================================================
+
 export default function App() {
   const { token, user } = useAuthStore();
 
@@ -354,8 +356,6 @@ export default function App() {
         <Route path="/courses" element={<ProtectedRoute role="student"><Layout><MyCoursesPage /></Layout></ProtectedRoute>} />
         <Route path="/assignments" element={<ProtectedRoute role="student"><Layout><AssignmentsPage /></Layout></ProtectedRoute>} />
         <Route path="/discussions" element={<ProtectedRoute><Layout><DiscussionPortalPage /></Layout></ProtectedRoute>} />
-
-        <Route path="/faculty/grading/:assignmentId" element={<ProtectedRoute role="faculty"><Layout><FacultyGradingPage /></Layout></ProtectedRoute>} />
         <Route path="/admin/console" element={<ProtectedRoute role="admin"><Layout><AdminControlPanel /></Layout></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
