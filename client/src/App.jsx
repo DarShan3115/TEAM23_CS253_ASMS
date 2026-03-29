@@ -1,27 +1,25 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { 
-  BrowserRouter as Router,  // ✅ CHANGED FROM HashRouter
+  BrowserRouter as Router,
   Routes, 
   Route, 
   Navigate,
   Link,
-  useParams,
   useNavigate
 } from 'react-router-dom';
 import { 
   LayoutDashboard, BookOpen, ClipboardList, 
   BarChart3, MessageSquare, ShieldAlert, LogOut,
-  User, Settings, Search, Bell, GraduationCap, 
-  Shield, ArrowLeft, Loader2, Award, UserPlus, 
-  BookMarked, FileText, CheckCircle2, TrendingUp,
-  PieChart, ExternalLink, MoreVertical, ShieldCheck,
-  Lock, Plus, Edit3, Trash2, Building2, Activity,
-  Database, Info, BadgeCheck, Send, Upload, Clock,
-  Filter, CheckCircle, ChevronRight, ChevronLeft,
-  Mail, RefreshCcw, ThumbsUp
+  Search, GraduationCap, Shield, Loader2,
+  BookMarked, FileText, ExternalLink, ShieldCheck
 } from 'lucide-react';
-import axios from 'axios';
 import { create } from 'zustand';
+
+// ============================================================================
+// --- API CONFIGURATION ---
+// ============================================================================
+// TODO: Replace with your backend API URL (e.g., 'https://api.asms.com/api')
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // ============================================================================
 // --- RESILIENT HELPERS ---
@@ -51,27 +49,43 @@ const useAuthStore = create((set) => ({
 
   login: async (email, password) => {
     set({ loading: true, error: null });
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const role = email.includes('admin') ? 'admin' : email.includes('faculty') ? 'faculty' : 'student';
-        const mockUser = { 
-          id: 'u-' + Math.random().toString(36).substr(2, 4),
-          first_name: email.split('@')[0], 
-          last_name: 'User', 
-          role: role,
-          email 
-        };
-        localStorage.setItem('token', 'mock-jwt');
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        set({ user: mockUser, token: 'mock-jwt', isAuthenticated: true, loading: false });
-        resolve({ success: true, user: mockUser });
-      }, 800);
-    });
+    try {
+      // TODO: Replace with actual backend API call
+      // const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ email, password })
+      // });
+      // if (!response.ok) throw new Error('Login failed');
+      // const data = await response.json();
+      
+      // Mock implementation for development
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const role = email.includes('admin') ? 'admin' : email.includes('faculty') ? 'faculty' : 'student';
+          const mockUser = { 
+            id: 'u-' + Math.random().toString(36).substr(2, 4),
+            first_name: email.split('@')[0], 
+            last_name: 'User', 
+            role: role,
+            email 
+          };
+          localStorage.setItem('token', 'mock-jwt');
+          localStorage.setItem('user', JSON.stringify(mockUser));
+          set({ user: mockUser, token: 'mock-jwt', isAuthenticated: true, loading: false });
+          resolve({ success: true, user: mockUser });
+        }, 800);
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      set({ error: errorMsg, loading: false });
+      throw err;
+    }
   },
 
   logout: () => {
     localStorage.clear();
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, token: null, isAuthenticated: false, error: null });
   },
   
   clearError: () => set({ error: null })
@@ -184,11 +198,12 @@ const DashboardPage = () => {
     }
   };
   const config = roleConfig[role];
+  const IconComponent = config.icon;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex items-center gap-4">
-        <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 border border-blue-500/20 shadow-xl"><config.icon size={28}/></div>
+        <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 border border-blue-500/20 shadow-xl"><IconComponent size={28}/></div>
         <div><h1 className="text-3xl font-black text-white">Welcome, {user?.first_name}!</h1><p className="text-gray-500 text-sm">{config.greeting}</p></div>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -252,23 +267,33 @@ const AdminControlPanel = () => {
 };
 
 const LoginPage = () => {
-  const { login } = useAuthStore();
+  const { login, error } = useAuthStore();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  
   const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.email.value;
-    await login(email, 'pass');
-    navigate('/dashboard');
+    setIsLoading(true);
+    try {
+      const email = e.target.email.value;
+      await login(email, 'pass');
+      navigate('/dashboard');
+    } catch (err) {
+      // Error is already set in store
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
       <div className="w-full max-w-md bg-gray-900 border border-gray-800 p-10 rounded-3xl shadow-2xl space-y-8">
         <div className="text-center"><h1 className="text-4xl font-black text-blue-500">ASMS.</h1><p className="text-gray-500 mt-2">Node Synchronization Required</p></div>
+        {error && <div className="bg-red-900/20 border border-red-500/50 text-red-400 p-3 rounded-xl text-sm">{error}</div>}
         <form onSubmit={handleLogin} className="space-y-4">
           <input name="email" className="w-full bg-gray-800 border border-gray-700 p-4 rounded-2xl text-white outline-none" placeholder="Email Address" required />
           <input type="password" name="pass" className="w-full bg-gray-800 border border-gray-700 p-4 rounded-2xl text-white outline-none" placeholder="Security Token" required />
-          <button type="submit" className="w-full bg-blue-600 py-4 rounded-2xl font-black text-white uppercase text-xs shadow-xl shadow-blue-600/20">Sign In</button>
+          <button type="submit" disabled={isLoading} className="w-full bg-blue-600 py-4 rounded-2xl font-black text-white uppercase text-xs shadow-xl shadow-blue-600/20 disabled:opacity-50">{isLoading ? 'Signing In...' : 'Sign In'}</button>
         </form>
         <p className="text-center text-[10px] text-gray-500 uppercase tracking-widest italic opacity-50">Hint: Use "admin@asms.edu" for admin role.</p>
       </div>
