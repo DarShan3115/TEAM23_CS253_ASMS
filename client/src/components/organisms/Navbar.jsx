@@ -1,21 +1,6 @@
 import React from 'react';
 import { LogOut, GraduationCap, BookOpen, Shield } from 'lucide-react';
-import useAuthStore from '../../store/authStore';
-/**
- * MOCK STORE: useAuthStore
- * Inlined to resolve dependency resolution issues in the preview environment.
- */
-const useAuthStore = () => {
-  return {
-    user: {
-      first_name: 'Demo',
-      last_name: 'User',
-      email: 'demo@asms.edu',
-      role: 'admin'
-    },
-    logout: () => console.log('Logout triggered')
-  };
-};
+import { useAuthStore } from '../../store/authStore';
 
 const roleBadge = {
   student: { label: 'Student', icon: GraduationCap, bg: 'bg-blue-500/20', text: 'text-blue-400' },

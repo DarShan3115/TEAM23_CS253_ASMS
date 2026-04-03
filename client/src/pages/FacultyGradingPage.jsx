@@ -16,7 +16,7 @@ export default function FacultyGradingPage({ assignmentId, onBack }) {
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
-        const res = await axios.get(`${PRODUCTIVITY_API}/api/v1/assignments/${assignmentId}/submissions`);
+        const res = await axios.get(`${PRODUCTIVITY_API}/assignments/${assignmentId}/submissions`);
         setSubmissions(res.data);
       } catch (err) {
         console.error("Failed to load submissions");
@@ -30,9 +30,16 @@ export default function FacultyGradingPage({ assignmentId, onBack }) {
   const handleGradeSubmit = async () => {
     if (!selectedSub) return;
     try {
-      await axios.put(`${PRODUCTIVITY_API}/api/v1/submissions/${selectedSub.id}/grade`, {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user'));
+      await axios.put(`${PRODUCTIVITY_API}/submissions/${selectedSub.id}/grade`, {
         grade: parseFloat(gradeInput.grade),
         feedback: gradeInput.feedback
+      }, {
+        headers: { 
+          'x-auth-token': token, 
+          'x-user-id': user?.id 
+        }
       });
       setSubmissions(submissions.map(s => 
         s.id === selectedSub.id ? { ...s, grade: gradeInput.grade, feedback: gradeInput.feedback } : s

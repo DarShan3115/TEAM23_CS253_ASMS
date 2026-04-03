@@ -4,30 +4,31 @@ import {
   Lock, Users, BadgeCheck, Info
 } from 'lucide-react';
 import axios from 'axios';
-
-// Assuming useAuthStore is available globally or imported
-// const user = useAuthStore(state => state.user);
+import { useAuthStore } from '../store/authStore';
 
 export default function DiscussionPortalPage() {
   const [posts, setPosts] = useState([]);
   const [newPost, setNewPost] = useState("");
   const [isAnon, setIsAnon] = useState(true);
   const [loading, setLoading] = useState(false);
-  
-  // Mocking the user role check (In your app, get this from authStore)
-  const user = JSON.parse(localStorage.getItem('user')) || { role: 'student' };
+  const { user } = useAuthStore();
+
   const isFaculty = user.role === 'faculty';
 
   const handlePost = async () => {
     if (!newPost.trim()) return;
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const res = await axios.post('http://localhost:8080/api/v1/discussions', {
         course_id: "CS101-ALGO",
         content: newPost,
         is_anonymous: isFaculty ? false : isAnon // Faculty forced to non-anon
       }, {
-        headers: { 'x-user-id': user.id }
+        headers: { 
+          'x-auth-token': token,
+          'x-user-id': user.id 
+        }
       });
       
       setPosts([{ ...res.data, author_name: isFaculty ? `${user.first_name} ${user.last_name}` : (isAnon ? 'Anonymous' : 'Me'), role: user.role }, ...posts]);

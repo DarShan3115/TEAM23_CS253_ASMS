@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from .database import Base
+from database import Base
 import uuid
 
 class User(Base):
@@ -13,8 +13,10 @@ class User(Base):
 class Course(Base):
     __tablename__ = "courses"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String, unique=True)
     title = Column(String)
     credits = Column(Integer)
+    instructor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
 
 class Enrollment(Base):
     __tablename__ = "enrollments"

@@ -1,70 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { create } from 'zustand';
-import axios from 'axios';
-
-// --- API CONFIGURATION ---
-const VITE_API_AUTH_URL = 'http://localhost:5001/api';
-
-const authApi = axios.create({
-  baseURL: VITE_API_AUTH_URL,
-});
-
-authApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers['x-auth-token'] = token;
-  }
-  return config;
-});
-
-// --- AUTH STORE ---
-const useAuthStore = create((set) => ({
-  user: null,
-  token: localStorage.getItem('token') || null,
-  isAuthenticated: !!localStorage.getItem('token'),
-  loading: false,
-  error: null,
-
-  register: async (userData) => {
-    set({ loading: true, error: null });
-    try {
-      // userData now contains first_name and last_name
-      const res = await authApi.post('/auth/register', userData);
-      const { token, user } = res.data;
-      
-      localStorage.setItem('token', token);
-      set({ user, token, isAuthenticated: true, loading: false });
-      return { success: true };
-    } catch (err) {
-      const message = err.response?.data?.message || 'Registration failed';
-      set({ error: message, loading: false });
-      return { success: false, message };
-    }
-  },
-
-  login: async (email, password) => {
-    set({ loading: true, error: null });
-    try {
-      const res = await authApi.post('/auth/login', { email, password });
-      const { token, user } = res.data;
-      localStorage.setItem('token', token);
-      set({ user, token, isAuthenticated: true, loading: false });
-      return { success: true };
-    } catch (err) {
-      set({ error: err.response?.data?.message || 'Login failed', loading: false });
-      return { success: false };
-    }
-  },
-
-  logout: () => {
-    localStorage.removeItem('token');
-    set({ user: null, token: null, isAuthenticated: false });
-  }
-}));
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { GraduationCap, BookOpen, UserCircle } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 // --- REGISTER PAGE COMPONENT ---
-const RegisterPage = ({ onNavigate }) => {
+export default function RegisterPage() {
   const { register, loading, error } = useAuthStore();
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     first_name: '', // Aligned with DB
@@ -102,26 +44,51 @@ const RegisterPage = ({ onNavigate }) => {
     });
 
     if (result.success) {
-      if (onNavigate) onNavigate('dashboard');
+      navigate('/dashboard');
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-md w-full space-y-8 p-8 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700">
+      <div className="max-w-lg w-full space-y-8 p-8 bg-gray-800 rounded-3xl shadow-2xl border border-gray-700">
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4 shadow-lg shadow-blue-600/20">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-            </svg>
+            {formData.role === 'faculty' ? (
+              <BookOpen className="w-8 h-8 text-white" />
+            ) : (
+              <GraduationCap className="w-8 h-8 text-white" />
+            )}
           </div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Student Registration</h2>
-          <p className="text-gray-400 mt-2">Academic System Management</p>
+          <h2 className="text-3xl font-black text-white tracking-tight">
+            {formData.role === 'faculty' ? 'Faculty' : 'Student'} Registration
+          </h2>
+          <p className="text-gray-400 mt-2 font-medium">Join the Academic Management System</p>
         </div>
         
+        {/* Role Selector Toggle */}
+        <div className="flex bg-gray-900/50 p-1 rounded-xl border border-gray-700">
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, role: 'student' })}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${
+              formData.role === 'student' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <GraduationCap size={14} /> Student
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, role: 'faculty' })}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${
+              formData.role === 'faculty' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <BookOpen size={14} /> Professor
+          </button>
+        </div>
+
         {(error || localError) && (
-          <div className="bg-red-900/30 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm">
+          <div className="bg-red-900/20 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
             {error || localError}
           </div>
         )}
@@ -203,17 +170,21 @@ const RegisterPage = ({ onNavigate }) => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 mt-4 rounded-lg font-bold text-white transition-all transform active:scale-[0.98] ${
-              loading ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/30'
+            className={`w-full py-4 px-4 mt-4 rounded-xl font-black text-white transition-all transform active:scale-[0.98] uppercase text-xs tracking-widest ${
+              loading 
+                ? 'bg-gray-700 cursor-not-allowed' 
+                : formData.role === 'faculty' 
+                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20' 
+                  : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/20'
             }`}
           >
-            {loading ? 'Creating Account...' : 'Register as Student'}
+            {loading ? 'Creating Account...' : `Register as ${formData.role === 'faculty' ? 'Professor' : 'Student'}`}
           </button>
         </form>
         
         <div className="text-center mt-6 pt-6 border-t border-gray-700/50">
           <button 
-            onClick={() => onNavigate && onNavigate('login')}
+            onClick={() => navigate('/login')}
             className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
           >
             Already have an account? Log in
@@ -221,44 +192,4 @@ const RegisterPage = ({ onNavigate }) => {
         </div>
       </div>
     </div>
-  );
-};
-
-// --- APP ENTRY POINT ---
-export default function App() {
-  const [view, setView] = useState('register');
-
-  const renderView = () => {
-    switch (view) {
-      case 'register':
-        return <RegisterPage onNavigate={setView} />;
-      case 'login':
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Login Page Placeholder</h1>
-              <button onClick={() => setView('register')} className="text-blue-400 hover:underline">Back to Register</button>
-            </div>
-          </div>
-        );
-      case 'dashboard':
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-2">Welcome!</h1>
-              <p className="text-gray-400 mb-4">You have registered successfully.</p>
-              <button onClick={() => setView('register')} className="text-blue-400 hover:underline">Sign Out</button>
-            </div>
-          </div>
-        );
-      default:
-        return <RegisterPage onNavigate={setView} />;
-    }
-  };
-
-  return (
-    <div className="app-container">
-      {renderView()}
-    </div>
-  );
-}
+  )};

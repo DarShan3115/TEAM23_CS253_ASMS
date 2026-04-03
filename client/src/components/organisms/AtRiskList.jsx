@@ -45,4 +45,4 @@ const AtRiskList = ({ students = [], loading }) => (
   </div>
 );
 
-export default AtRiskSection;
+export default AtRiskList;

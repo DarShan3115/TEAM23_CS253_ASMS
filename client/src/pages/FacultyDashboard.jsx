@@ -23,7 +23,8 @@ export default function FacultyDashboard() {
     setError(null);
     try {
       const token = localStorage.getItem('token');
-      const headers = { 'x-auth-token': token };
+      const user = JSON.parse(localStorage.getItem('user'));
+      const headers = { 'x-auth-token': token, 'x-user-id': user?.id };
 
       // 1. Fetch courses from Academic Service (Django)
       // 2. Fetch risk analytics from Analytics Service (FastAPI)

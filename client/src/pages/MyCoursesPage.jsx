@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 // --- API CONFIG ---
-const ACADEMIC_API = 'http://localhost:8000/api';
+const ACADEMIC_API = import.meta.env.VITE_ACADEMIC_API_URL || 'http://localhost:8000/api';
 
 export default function MyCoursesPage() {
   const [courses, setCourses] = useState([]);

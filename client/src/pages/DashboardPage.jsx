@@ -1,5 +1,5 @@
 import { GraduationCap, BookOpen, Shield, ClipboardList, Users, BarChart3 } from 'lucide-react';
-import useAuthStore from '../store/authStore';
+import {useAuthStore} from '../store/authStore';
 
 const roleConfig = {
   student: {

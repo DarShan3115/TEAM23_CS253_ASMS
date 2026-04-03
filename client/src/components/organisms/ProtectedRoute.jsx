@@ -1,18 +1,5 @@
 import React, { useEffect } from 'react';
-import useAuthStore from '../../store/authStore';
-
-/**
- * MOCK STORE: useAuthStore
- * Inlined to resolve dependency resolution issues in the preview environment.
- * In your local production environment, restore: 
- * import useAuthStore from '../../store/authStore';
- */
-const useAuthStore = () => {
-  // Mocking the auth state for preview purposes.
-  // We check localStorage to mimic actual persistence logic.
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  return { token };
-};
+import { useAuthStore } from '../../store/authStore'; 
 
 /**
  * UTILITY: ProtectedRoute

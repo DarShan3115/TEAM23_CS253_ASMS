@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from .database import SessionLocal
-from . import models, calculations
+from database import SessionLocal
+import models, calculations
 
 app = FastAPI(
     title="ASMS Analytics Service",
@@ -14,7 +14,7 @@ app = FastAPI(
 # Allows the React frontend (port 3000) to communicate with this service
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,7 +63,7 @@ def get_student_overview(x_user_id: str = Header(None), db: Session = Depends(ge
     
     for enr in enrollments:
         # Fetch course metadata for titles and credits
-        course = db.query(models.Course).filter(models.Course.id == enr.course_id).first()
+        course = db.query(models.Course).filter(models.Course.id == str(enr.course_id)).first()
         
         # Calculate real-time attendance for this subject
         att_percentage = calculations.calculate_subject_attendance(db, x_user_id, str(enr.course_id))
