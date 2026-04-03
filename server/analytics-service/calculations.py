@@ -1,18 +1,19 @@
+from sqlalchemy.orm import Session
+import models
 # Standard GPA mapping
 GRADE_POINTS = {
-    'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 
-    'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'C-': 1.7, 
-    'D': 1.0, 'F': 0.0
+    'A+': 10.0, 'A': 10.0, 'B+': 9.0, 'B': 8.0, 
+    'C+': 7.0, 'C': 6.0, 'D+': 5.0, 'D': 4.0, 
+    'E': 0.0, 'F': 0.0
 }
 
 def calculate_gpa(enrollments, db):
     total_points = 0
     total_credits = 0
     
-    from .models import Course
     for enr in enrollments:
         if enr.grade in GRADE_POINTS:
-            course = db.query(Course).filter(Course.id == enr.course_id).first()
+            course = db.query(models.Course).filter(models.Course.id == enr.course_id).first()
             if course:
                 credits = course.credits
                 total_points += (GRADE_POINTS[enr.grade] * credits)
@@ -21,10 +22,9 @@ def calculate_gpa(enrollments, db):
     return total_points / total_credits if total_credits > 0 else 0.0
 
 def calculate_subject_attendance(db, student_id, course_id):
-    from .models import AttendanceLog
-    logs = db.query(AttendanceLog).filter(
-        AttendanceLog.student_id == student_id,
-        AttendanceLog.course_id == course_id
+    logs = db.query(models.AttendanceLog).filter(
+        models.AttendanceLog.student_id == student_id,
+        models.AttendanceLog.course_id == course_id
     ).all()
     
     if not logs:
