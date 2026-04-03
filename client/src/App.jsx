@@ -1,27 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HashRouter as Router, 
   Routes, 
   Route, 
   Navigate,
-  NavLink,
-  useLocation,
   useParams,
   useNavigate
 } from 'react-router-dom';
-import { 
-  LayoutDashboard, BookOpen, ClipboardList, 
-  BarChart3, MessageSquare, ShieldAlert, LogOut,
-  User, Settings, Search, Bell, GraduationCap, 
-  Shield, ArrowLeft, Loader2, Award, UserPlus, 
-  BookMarked, FileText, CheckCircle2, TrendingUp,
-  PieChart, ExternalLink, MoreVertical, ShieldCheck,
-  Lock, Plus, Edit3, Trash2, Building2, Activity,
-  Database, Info, BadgeCheck, Send, Upload, Clock,
-  Filter, CheckCircle, ChevronRight, ChevronLeft,
-  Mail, RefreshCcw, ThumbsUp
-} from 'lucide-react';
-import axios from 'axios';
 import MyCoursesPage from './pages/MyCoursesPage';
 import AdminControlPanel from './pages/AdminControlPanel';
 import FacultyDashboard from './pages/FacultyDashboard';
