@@ -1,8 +1,12 @@
 from fastapi import FastAPI, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal
+import os
+from database import SessionLocal, engine
 import models, calculations
+
+# Ensure all missing tables (like attendance_logs) are created on startup
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ASMS Analytics Service",
@@ -12,9 +16,16 @@ app = FastAPI(
 
 # --- CORS CONFIGURATION ---
 # Allows the React frontend (port 3000) to communicate with this service
+allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+# Add Codespaces frontend URL if running in Codespaces
+codespace_name = os.getenv("CODESPACE_NAME")
+if codespace_name:
+    allowed_origins.append(f"https://{codespace_name}-3000.app.github.dev")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

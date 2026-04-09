@@ -9,24 +9,35 @@ export default defineConfig({
     host: true, // Allows access from network/Codespace
     proxy: {
       '/api/auth': {
-        target: 'http://localhost:5001',
+        target: 'http://auth-service:5001', // Use Docker service name
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/users': {
+        target: 'http://auth-service:5001', // Use Docker service name
+        changeOrigin: true,
+        secure: false,
+      },
+      '/uploads': {
+        target: 'http://auth-service:5001', // Serve avatar images via proxy
         changeOrigin: true,
         secure: false,
       },
       '/api/analytics': {
-        target: 'http://localhost:8000', // Assuming FastAPI default
+        target: 'http://analytics-service:8001', // Use Docker service name and correct port
         changeOrigin: true,
         secure: false,
       },
       '/api/v1': {
-        target: 'http://localhost:8080', // Productivity Service (Go)
+        target: 'http://productivity-service:8080', // Use Docker service name
         changeOrigin: true,
         secure: false,
       },
       '/api/academic': {
-        target: 'http://localhost:8001', // Assuming Django/Academic port
+        target: 'http://academic-service:8000', // Use Docker service name and correct port
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api\/academic/, '/api')
       },
     },
   }
