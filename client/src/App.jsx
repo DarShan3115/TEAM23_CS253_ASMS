@@ -70,7 +70,6 @@ export default function App() {
         <Route path="/progress" element={<ProtectedRoute role="student"><MainLayout><AcademicProgressPage /></MainLayout></ProtectedRoute>} />
         <Route path="/discussions" element={<ProtectedRoute><MainLayout><DiscussionPortalPage /></MainLayout></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><MainLayout><ProfilePage /></MainLayout></ProtectedRoute>} />
-
         <Route path="/faculty/grading/:assignmentId" element={<ProtectedRoute role="faculty"><MainLayout><FacultyGradingWrapper /></MainLayout></ProtectedRoute>} />
         <Route path="/faculty-hub" element={<ProtectedRoute role="faculty"><MainLayout><FacultyDashboard /></MainLayout></ProtectedRoute>} />
         <Route path="/admin/console" element={<ProtectedRoute role="admin"><MainLayout><AdminControlPanel /></MainLayout></ProtectedRoute>} />

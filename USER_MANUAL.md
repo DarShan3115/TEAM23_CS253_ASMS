@@ -157,4 +157,8 @@ These actions are typically performed directly via administrative interfaces or 
 **A:** Your session token (JWT) has likely expired, or the system could not find your authorization header. Simply log in again to refresh your secure session.
 
 **Q: As a faculty member, my dashboard says "Course data unavailable".**
+
 **A:** This is a UI safety fallback indicating the frontend successfully loaded, but the academic service database is momentarily unreachable or returned incomplete data for that specific course. Refresh the page after a few moments.
+=======
+**A:** This is a UI safety fallback indicating the frontend successfully loaded, but the academic service database is momentarily unreachable or returned incomplete data for that specific course. Refresh the page after a few moments.
+
