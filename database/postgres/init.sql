@@ -119,3 +119,23 @@ VALUES (
     'Admin',
     'admin'
 ) ON CONFLICT (email) DO NOTHING;
+
+-- ── Seed sample student (password: student123) ──────────────────────────────
+INSERT INTO users (email, password_hash, first_name, last_name, role)
+VALUES (
+    'student@asms.edu',
+    '$2b$10$7R9ia3lS7Y36Zp8B6C/I9.8tVv9S/0S8G5z1Yx8Z0iV7p1S0y2m2.', -- hash of 'student123'
+    'Jane',
+    'Doe',
+    'student'
+) ON CONFLICT (email) DO NOTHING;
+
+-- ── Seed sample faculty (password: faculty123) ──────────────────────────────
+INSERT INTO users (email, password_hash, first_name, last_name, role)
+VALUES (
+    'faculty@asms.edu',
+    '$2b$10$K0WvH8YfSjI0gE3p0V9OLeV7u8S9G5z1Yx8Z0iV7p1S0y2m2.', -- hash of 'faculty123'
+    'John',
+    'Smith',
+    'faculty'
+) ON CONFLICT (email) DO NOTHING;

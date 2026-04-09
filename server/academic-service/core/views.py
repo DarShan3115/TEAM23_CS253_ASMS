@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Enrollment, Course
-from .serializers import ScheduleSerializer, CourseSerializer
+from .serializers import ScheduleSerializer, CourseSerializer, FacultyCourseSerializer
 
 class MyScheduleView(APIView):
     """

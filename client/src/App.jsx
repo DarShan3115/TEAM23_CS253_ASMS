@@ -15,6 +15,7 @@ import FacultyGradingPage from './pages/FacultyGradingPage';
 import AcademicProgressPage from './pages/AcademicProgressPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import ProfilePage from './pages/ProfilePage';
 import RegisterPage from './pages/RegisterPage';
 import MainLayout from './layouts/MainLayout';
 import { useAuthStore } from './store/authStore';
@@ -68,7 +69,7 @@ export default function App() {
         <Route path="/assignments" element={<ProtectedRoute role="student"><MainLayout><AssignmentsPage /></MainLayout></ProtectedRoute>} />
         <Route path="/progress" element={<ProtectedRoute role="student"><MainLayout><AcademicProgressPage /></MainLayout></ProtectedRoute>} />
         <Route path="/discussions" element={<ProtectedRoute><MainLayout><DiscussionPortalPage /></MainLayout></ProtectedRoute>} />
-
+        <Route path="/profile" element={<ProtectedRoute><MainLayout><ProfilePage /></MainLayout></ProtectedRoute>} />
         <Route path="/faculty/grading/:assignmentId" element={<ProtectedRoute role="faculty"><MainLayout><FacultyGradingWrapper /></MainLayout></ProtectedRoute>} />
         <Route path="/faculty-hub" element={<ProtectedRoute role="faculty"><MainLayout><FacultyDashboard /></MainLayout></ProtectedRoute>} />
         <Route path="/admin/console" element={<ProtectedRoute role="admin"><MainLayout><AdminControlPanel /></MainLayout></ProtectedRoute>} />

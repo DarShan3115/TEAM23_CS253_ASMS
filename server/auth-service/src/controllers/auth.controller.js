@@ -1,14 +1,14 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
+const { query } = require('../config/db');
 
 // --- USER REGISTRATION ---
 exports.register = async (req, res) => {
-    const { first_name, last_name, email, password, role } = req.body;
+    const { first_name, last_name, email, password, role, phone } = req.body;
 
     try {
         // Check if user exists
-        let userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        let userCheck = await query('SELECT * FROM users WHERE email = $1', [email]);
         if (userCheck.rows.length > 0) {
             return res.status(400).json({ error: "User already exists" });
         }
@@ -18,22 +18,19 @@ exports.register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // Insert user into PostgreSQL
-        const newUser = await pool.query(
-            'INSERT INTO users (first_name, last_name, email, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, first_name, role',
-            [first_name, last_name, email, hashedPassword, role || 'student']
+        const newUser = await query(
+            'INSERT INTO users (first_name, last_name, email, password_hash, role, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, first_name, last_name, role, phone, avatar_url, created_at',
+            [first_name, last_name, email, hashedPassword, role || 'student', phone]
         );
 
         // Create JWT with Role
-        const payload = { user: { id: newUser.rows[0].id, role: newUser.rows[0].role } };
-        
-        jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' }, (err, token) => {
-            if (err) throw err;
-            res.json({ token, user: newUser.rows[0] });
-        });
+        const registerPayload = { id: newUser.rows[0].id, role: newUser.rows[0].role };
+        const token = jwt.sign(registerPayload, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
+        res.json({ token, user: newUser.rows[0] });
 
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Registration failed');
+        res.status(500).json({ error: `Registration failed: ${err.message}` });
     }
 };
 
@@ -42,29 +39,36 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
         if (userResult.rows.length === 0) {
             return res.status(400).json({ error: "Invalid Credentials" });
         }
 
         const user = userResult.rows[0];
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, user.password_hash);
         
         if (!isMatch) {
             return res.status(400).json({ error: "Invalid Credentials" });
         }
 
-        // Issue JWT containing the User ID and Role
-        const payload = { user: { id: user.id, role: user.role } };
+        // Issue JWT containing the User ID and Role (flat structure)
+        const loginPayload = { id: user.id, role: user.role };
 
-        jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' }, (err, token) => {
-            if (err) throw err;
-            res.json({ 
-                token, 
-                user: { id: user.id, first_name: user.first_name, role: user.role } 
-            });
+        const token = jwt.sign(loginPayload, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
+        res.json({ 
+            token, 
+            user: { 
+                id: user.id, 
+                email: user.email,
+                first_name: user.first_name, 
+                last_name: user.last_name,
+                role: user.role,
+                phone: user.phone,
+                avatar_url: user.avatar_url
+            } 
         });
     } catch (err) {
-        res.status(500).send('Login failed');
+        console.error(err.message);
+        res.status(500).json({ error: `Login failed: ${err.message}` });
     }
 };

@@ -27,6 +27,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./server/auth-service:/app
+      - /app/node_modules # Anonymous Volume: Boosts I/O speed
 
   academic-service:
     build: ./server/academic-service
@@ -36,12 +39,13 @@ services:
       - DB_PASSWORD=password
       - DB_HOST=db
       - DB_PORT=5432
-      - SECRET_KEY=django-insecure-replace-this-with-a-real-key
+      - SECRET_KEY=django-insecure-key
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    # Optimization: Ensure migrations run safely on every boot
     command: >
       sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
 
@@ -64,21 +68,30 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
       - ACADEMIC_SERVICE_URL=http://academic-service:8000
       - AUTH_SERVICE_URL=http://auth-service:5001
+      - PYTHONPATH=/app # FIX: Resolves Python Absolute Imports
     ports:
       - "8001:8001"
     depends_on:
       db:
         condition: service_healthy
+    # FIX: Using module flag to ensure context is handled correctly
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8001
 
   frontend:
     build: ./client
+    command: npm run dev
     ports:
-      - "3000:80"
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules # Anonymous Volume
+    environment:
+      - HOST=0.0.0.0 # Force listening on all interfaces for Docker
     depends_on:
       - auth-service
       - academic-service
       - productivity-service
+      - analytics-service
 
 volumes:
   postgres_data:

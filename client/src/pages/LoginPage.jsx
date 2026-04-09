@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, BookOpen, Shield, ArrowLeft, LogIn } from 'lucide-react';
-import useAuthStore from '../store/authStore';
+import {useAuthStore} from '../store/authStore';
 
 const roles = [
   {
