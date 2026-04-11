@@ -2,26 +2,26 @@ package models
 
 import (
 	"time"
+
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type Task struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
-	Title       string         `gorm:"not null" json:"title"`
-	Description string         `json:"description"`
-	CourseID    *uuid.UUID     `gorm:"type:uuid" json:"course_id"` // Optional link to a course
-	UserID      uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
-	DueDate     *time.Time     `json:"due_date"`
-	Priority    string         `gorm:"default:'Medium'" json:"priority"` // High, Medium, Low
-	Status      string         `gorm:"default:'Pending'" json:"status"`   // Pending, Completed
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID          uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	UserID      uuid.UUID  `gorm:"type:uuid;not null" json:"user_id"`
+	Title       string     `gorm:"not null" json:"title"`
+	Description string     `json:"description"`
+	DueDate     *string    `gorm:"type:date" json:"due_date"`
+	DueTime     *string    `gorm:"type:time" json:"due_time"`
+	CourseID    *uuid.UUID `gorm:"type:uuid" json:"course_id"`
+	CourseTag   string     `gorm:"type:varchar(6)" json:"course_tag"`
+	CustomTag   string     `gorm:"type:varchar(50)" json:"custom_tag"`
+	Priority    string     `gorm:"type:varchar(20)" json:"priority"`
+	Status      string     `gorm:"type:varchar(20)" json:"status"`
+	IsCompleted *bool      `gorm:"default:false" json:"is_completed"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
-// TableName matches the plural naming convention if needed, 
-// but we'll stick to the init.sql schema if you add a tasks table there.
 func (Task) TableName() string {
-	return "assignments" // Mapping to your 'assignments' table in init.sql
+	return "tasks"
 }

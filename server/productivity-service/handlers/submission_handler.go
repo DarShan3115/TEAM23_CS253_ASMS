@@ -73,3 +73,37 @@ func (h *SubmissionHandler) GetSubmissionByTask(c *gin.Context) {
 
 	c.JSON(http.StatusOK, submission)
 }
+
+// GradeSubmission lets faculty enter marks and feedback for a submission
+func (h *SubmissionHandler) GradeSubmission(c *gin.Context) {
+	submissionID := c.Param("submissionId")
+	var input struct {
+		Marks    *int   `json:"marks"`
+		Feedback string `json:"feedback"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid grading data"})
+		return
+	}
+
+	var submission models.Submission
+	if err := h.DB.First(&submission, "id = ?", submissionID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+		return
+	}
+
+	if input.Marks != nil {
+		submission.Marks = input.Marks
+	}
+	if input.Feedback != "" {
+		submission.Feedback = input.Feedback
+	}
+
+	if err := h.DB.Save(&submission).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save grade"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Grade saved", "submission_id": submission.ID})
+}

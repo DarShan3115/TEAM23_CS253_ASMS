@@ -22,6 +22,17 @@ services:
       - PORT=5001
       - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
       - JWT_SECRET=generate_a_long_random_string_here
+      - JWT_REFRESH_SECRET=generate_another_long_random_refresh_string_here
+      - NODE_ENV=development
+      # ── Email (Nodemailer / Gmail SMTP) ──────────────────────────────────
+      # Fill these in to send real emails; leave blank to use console mock
+      - SMTP_USER=
+      - SMTP_PASS=
+      # ── SMS (Twilio) ──────────────────────────────────────────────────────
+      # Fill these in to send real SMS OTPs; leave blank to use console mock
+      - TWILIO_ACCOUNT_SID=
+      - TWILIO_AUTH_TOKEN=
+      - TWILIO_PHONE=
     ports:
       - "5001:5001"
     depends_on:

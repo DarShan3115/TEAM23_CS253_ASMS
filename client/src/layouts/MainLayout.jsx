@@ -1,28 +1,25 @@
 import React from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { LogOut, Shield, LayoutDashboard, BookOpen, ClipboardList, BarChart3, MessageSquare, User, ShieldAlert } from 'lucide-react';
-import { useAuthStore } from '../store/authStore'; 
+import { LogOut, Shield, LayoutDashboard, BookOpen, ClipboardList, BarChart3, User, ShieldAlert } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 const navConfig = {
   student: [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'View Courses', path: '/courses', icon: BookOpen },
-    { label: 'My Assignments', path: '/assignments', icon: ClipboardList },
-    { label: 'Academic Progress', path: '/progress', icon: BarChart3 },
-    { label: 'Discussion Portal', path: '/discussions', icon: MessageSquare },
-    { label: 'My Profile', path: '/profile', icon: User }
+    { label: 'Dashboard',        path: '/dashboard', icon: LayoutDashboard },
+    { label: 'My Courses',       path: '/courses',   icon: BookOpen },
+    { label: 'Task Management',  path: '/tasks',      icon: ClipboardList },
+    { label: 'My Profile',       path: '/profile',   icon: User },
   ],
   faculty: [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Faculty Hub', path: '/faculty-hub', icon: BookOpen },
-    { label: 'Discussion Portal', path: '/discussions', icon: MessageSquare },
-    { label: 'My Profile', path: '/profile', icon: User }
+    { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
+    { label: 'My Courses', path: '/faculty-hub', icon: BookOpen },
+    { label: 'My Profile', path: '/profile',     icon: User },
   ],
   admin: [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Dashboard',     path: '/dashboard',     icon: LayoutDashboard },
     { label: 'Admin Console', path: '/admin/console', icon: ShieldAlert },
-    { label: 'My Profile', path: '/profile', icon: User }
-  ]
+    { label: 'My Profile',    path: '/profile',       icon: User },
+  ],
 };
 
 export default function MainLayout({ children }) {
@@ -38,46 +35,70 @@ export default function MainLayout({ children }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-950 text-gray-100 selection:bg-blue-500/30">
-      {/* Sidebar logic from App.jsx Layout */}
-      <aside className="w-64 bg-gray-950 border-r border-gray-900 flex flex-col h-screen sticky top-0 hidden md:flex shrink-0">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="bg-blue-600 p-2 rounded-xl shadow-lg"><Shield className="text-white" size={20} /></div>
-            <span className="text-xl font-black text-white tracking-tighter">ASMS.</span>
+    <div className="flex min-h-screen bg-zinc-950 text-zinc-100">
+      {/* ── Sidebar ── */}
+      <aside className="w-60 bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen sticky top-0 hidden md:flex shrink-0">
+        {/* Brand */}
+        <div className="px-5 py-6 border-b border-zinc-800">
+          <div className="flex items-center gap-2.5">
+            <Shield size={18} className="text-blue-500" />
+            <span className="text-base font-semibold text-white">ASMS</span>
           </div>
-          <nav className="flex flex-col gap-2">
-            {navItems.map((item, idx) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={idx}
-                  to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
-                    isActive 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                      : 'text-gray-500 hover:text-white hover:bg-gray-900'
-                  }`}
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <p className="text-xs text-zinc-500 mt-1">IIT Kanpur</p>
         </div>
-        <div className="mt-auto p-6 border-t border-gray-900">
-          <div className="flex items-center gap-3 mb-6 px-2">
-            <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center font-black text-xs border border-gray-700">{user?.first_name?.[0]}</div>
-            <div className="truncate"><p className="text-xs font-bold text-white truncate">{user?.first_name}</p><p className="text-[9px] text-blue-500 uppercase font-black">{role}</p></div>
+
+        {/* Nav */}
+        <nav className="flex flex-col gap-1 p-3 flex-1">
+          {navItems.map((item, idx) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            return (
+              <Link
+                key={idx}
+                to={item.path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Icon size={16} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User footer */}
+        <div className="p-3 border-t border-zinc-800">
+          <div className="flex items-center gap-3 px-2 py-2 mb-1">
+            <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center text-xs font-semibold text-zinc-300">
+              {user?.first_name?.[0]}{user?.last_name?.[0]}
+            </div>
+            <div className="truncate">
+              <p className="text-sm font-medium text-white truncate">{user?.first_name} {user?.last_name}</p>
+              <p className="text-xs text-zinc-500 capitalize">{role}</p>
+            </div>
           </div>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3.5 text-red-500 hover:bg-red-500/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest"><LogOut size={18} /> Logout</button>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors text-sm"
+          >
+            <LogOut size={16} /> Sign Out
+          </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto relative">
-        <header className="h-16 border-b border-gray-900 px-8 flex items-center justify-between sticky top-0 bg-gray-950/80 backdrop-blur-md z-10"><h2 className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em]">NODE // ENCRYPTED_ACTIVE</h2></header>
-        <div className="p-10 max-w-7xl mx-auto">
+
+      {/* ── Main content ── */}
+      <main className="flex-1 overflow-y-auto">
+        <header className="h-14 border-b border-zinc-800 px-6 flex items-center justify-between sticky top-0 bg-zinc-950 z-10">
+          <span className="text-sm font-medium text-zinc-400">Academic School Management System</span>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-xs text-zinc-500">Online</span>
+          </div>
+        </header>
+        <div className="p-8 max-w-6xl mx-auto">
           {children || <Outlet />}
         </div>
       </main>

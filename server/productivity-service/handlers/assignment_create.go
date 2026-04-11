@@ -26,7 +26,7 @@ func (h *TaskHandler) CreateAssignment(c *gin.Context) {
 	facultyIDStr := c.GetHeader("x-user-id")
 	facultyID, _ := uuid.Parse(facultyIDStr)
 
-	// In a real app, you'd parse the DueDate string to a time.Time object
+	// Create a new task mapping to an assignment
 	assignment := models.Task{
 		ID:          uuid.New(),
 		Title:       input.Title,

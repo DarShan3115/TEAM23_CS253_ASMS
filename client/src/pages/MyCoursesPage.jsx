@@ -1,238 +1,202 @@
 import React, { useState, useEffect } from 'react';
-import CourseGrid from '../components/organisms/CourseGrid';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 import { 
-  Search, 
-  Filter, 
   BookOpen, 
-  User, 
-  Award, 
-  Clock, 
-  CheckCircle2, 
-  PlusCircle,
-  AlertCircle,
+  Plus, 
+  Search, 
   ArrowRight,
+  Key,
   X,
-  Key
+  AlertCircle,
+  GraduationCap
 } from 'lucide-react';
 
-// --- API CONFIG ---
 const ACADEMIC_API = import.meta.env.VITE_ACADEMIC_API_URL || '/api/academic';
 
-// --- DUMMY DATA FALLBACK ---
-const DUMMY_COURSES = [
-  { id: 'mock-1', code: 'CS101', title: 'Introduction to Programming', instructor_name: 'Dr. Alan Turing', credits: 4 },
-  { id: 'mock-2', code: 'MTH201', title: 'Calculus II', instructor_name: 'Dr. Isaac Newton', credits: 3 },
-  { id: 'mock-3', code: 'PHY301', title: 'Quantum Mechanics', instructor_name: 'Dr. Marie Curie', credits: 4 },
-  { id: 'mock-4', code: 'ENG105', title: 'Technical Communication', instructor_name: 'Prof. J.R.R. Tolkien', credits: 2 }
-];
-
 export default function MyCoursesPage() {
-  const [courses, setCourses] = useState([]);
+  const navigate = useNavigate();
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [enrollLoadingId, setEnrollLoadingId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState(null);
   
-  // Enrollment Modal States
-  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [courseKey, setCourseKey] = useState('');
-  const [enrollError, setEnrollError] = useState('');
+  // Modal States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ code: '', key: '' });
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
 
   useEffect(() => {
-    fetchInitialData();
+    fetchMySchedule();
   }, []);
 
-  const fetchInitialData = async () => {
+  const fetchMySchedule = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'x-auth-token': token };
-
-      const [courseRes, enrollRes] = await Promise.all([
-        axios.get(`${ACADEMIC_API}/courses/`, { headers }),
-        axios.get(`${ACADEMIC_API}/courses/my-schedule/`, { headers })
-      ]);
-
-      setCourses(courseRes.data?.length ? courseRes.data : DUMMY_COURSES);
-      setEnrollments(enrollRes.data || []);
+      const res = await api.get(`${ACADEMIC_API}/courses/my-schedule/`);
+      setEnrollments(res.data || []);
     } catch (err) {
-      setError("Academic Service offline. Showing mock courses. Use key '1234' to test enrollment.");
-      setCourses(DUMMY_COURSES);
-      setEnrollments([]);
+      setError("Failed to fetch your academic schedule. Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEnrollClick = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
-    setSelectedCourse(course);
-    setCourseKey('');
-    setEnrollError('');
-    setEnrollModalOpen(true);
-  };
-
-  const confirmEnrollment = async (e) => {
+  const handleJoinCourse = async (e) => {
     e.preventDefault();
-    if (!courseKey.trim()) {
-      setEnrollError('Course key is required.');
+    if (!addForm.code || !addForm.key) {
+      setAddError("Both Course Code and Enrollment Key are required.");
       return;
     }
 
-    setEnrollLoadingId(selectedCourse.id);
-    setEnrollError('');
-    
+    setAddLoading(true);
+    setAddError('');
     try {
-      // MOCK MODE FALLBACK CHECK
-      if (selectedCourse.id.startsWith('mock-')) {
-        await new Promise(r => setTimeout(r, 800)); // Simulate network delay
-        if (courseKey === '1234') {
-          setEnrollments([...enrollments, { course_id: selectedCourse.id, status: 'enrolled' }]);
-          setEnrollModalOpen(false);
-        } else {
-          setEnrollError("Invalid mock key. Use '1234' for offline testing.");
-        }
-        setEnrollLoadingId(null);
-        return;
-      }
-
-      const token = localStorage.getItem('token');
-      await axios.post(`${ACADEMIC_API}/courses/enroll/`, { 
-        course_id: selectedCourse.id,
-        course_key: courseKey 
-      }, { headers: { 'x-auth-token': token } });
+      // We send the code and key. The backend finds the course by code and verifies the key.
+      await api.post(`${ACADEMIC_API}/courses/enroll-by-code/`, {
+        course_code: addForm.code.toUpperCase(),
+        enrollment_key: addForm.key
+      });
       
-      setEnrollments([...enrollments, { course_id: selectedCourse.id, status: 'enrolled' }]);
-      setEnrollModalOpen(false);
+      setShowAddModal(false);
+      setAddForm({ code: '', key: '' });
+      fetchMySchedule(); // Refresh list
     } catch (err) {
-      console.error("Enrollment error", err);
-      setEnrollError(err.response?.data?.message || "Invalid course key or server error.");
+      setAddError(err.response?.data?.message || "Invalid Course Code or Enrollment Key.");
     } finally {
-      setEnrollLoadingId(null);
+      setAddLoading(false);
     }
   };
 
-  const filteredCourses = courses.filter(c => 
-    c.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
-      <div className="max-w-7xl mx-auto space-y-10">
-        
-        {/* Header Molecule */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-black text-white tracking-tight">Academic Catalog</h1>
-            <p className="text-gray-400 font-medium">Browse and enroll in available courses for the current semester.</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-              <input 
-                type="text"
-                placeholder="Search by code or title..."
-                className="bg-gray-800 border border-gray-700 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 w-64 transition-all"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <button className="bg-gray-800 border border-gray-700 p-2.5 rounded-xl text-gray-400 hover:text-white hover:border-gray-600 transition-all">
-              <Filter size={20} />
-            </button>
-          </div>
+    <div className="space-y-8">
+      {/* ── Header Piece ── */}
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">My Academic Schedule</h1>
+          <p className="text-zinc-500 text-sm mt-1">Manage your active enrollments and course workspaces.</p>
         </div>
+        
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-600/10"
+        >
+          <Plus size={18} /> Enroll in New Course
+        </button>
+      </div>
 
-        {error && (
-          <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-center gap-3 text-red-200 animate-in fade-in slide-in-from-top-4">
-            <AlertCircle size={20} />
-            <p className="text-sm font-bold">{error}</p>
-          </div>
-        )}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400 text-sm">
+          <AlertCircle size={18} /> {error}
+        </div>
+      )}
 
-        {/* Catalog Section */}
-        <section className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
-            <h2 className="text-xl font-bold text-white">Available Subjects</h2>
-            <span className="bg-gray-800 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-black uppercase">
-              {filteredCourses.length} Found
-            </span>
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-64 bg-gray-800/50 animate-pulse rounded-2xl border border-gray-700" />
-              ))}
-            </div>
-          ) : filteredCourses.length > 0 ? (
-            <CourseGrid 
-              courses={filteredCourses} 
-              enrollments={enrollments} 
-              onEnroll={handleEnrollClick}
-              loadingId={enrollLoadingId}
-            />
-          ) : (
-            <div className="py-20 text-center flex flex-col items-center">
-              <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4 text-gray-600">
-                <Search size={32} />
+      {/* ── Enrolled Courses List ── */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-44 bg-zinc-900 border border-zinc-800 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : enrollments.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {enrollments.map((course) => (
+            <div 
+              key={course.id}
+              onClick={() => navigate(`/courses/${course.id}`)}
+              className="group bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-5 cursor-pointer transition-colors"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-blue-400">
+                  <BookOpen size={20} />
+                </div>
+                <span className="text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded uppercase tracking-wider">
+                  {course.code}
+                </span>
               </div>
-              <h3 className="text-xl font-bold text-white">No courses match your search</h3>
-              <p className="text-gray-500 mt-1">Try searching for a different keyword or department code.</p>
+              
+              <h3 className="text-base font-semibold text-white group-hover:text-blue-400 transition-colors mb-1 truncate">
+                {course.title}
+              </h3>
+              <p className="text-xs text-zinc-500 mb-4">{course.credits} Credits · {course.semester}</p>
+              
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                <span className="text-xs text-green-500 font-medium flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Active Enrollment
+                </span>
+                <ArrowRight size={16} className="text-zinc-700 group-hover:text-blue-400 transition-all" />
+              </div>
             </div>
-          )}
-        </section>
+          ))}
+        </div>
+      ) : (
+        <div className="py-20 flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-2xl">
+          <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 text-zinc-700">
+            <GraduationCap size={32} />
+          </div>
+          <h3 className="text-lg font-semibold text-white">No active enrollments</h3>
+          <p className="text-zinc-500 text-sm mt-1 max-w-xs text-center">
+            You haven't joined any courses yet. Click the button above to unlock a course workspace.
+          </p>
+        </div>
+      )}
 
-        {/* Secure Enrollment Key Modal */}
-        {enrollModalOpen && selectedCourse && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Key className="text-blue-500" size={20} /> Course Verification
-                </h3>
-                <button onClick={() => setEnrollModalOpen(false)} className="p-1 text-gray-500 hover:text-white bg-gray-800 rounded-lg hover:bg-gray-700 transition">
-                  <X size={20} />
+      {/* ── Gain Access Modal ── */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Key className="text-blue-500" size={18} /> Gain Course Access
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="text-zinc-500 hover:text-white transition">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              Enter the Course Code and the secret key provided by your instructor to unlock the workspace.
+            </p>
+            
+            <form onSubmit={handleJoinCourse} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Course Code</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. CS253"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition-all placeholder-zinc-600 uppercase"
+                  value={addForm.code}
+                  onChange={e => setAddForm({ ...addForm, code: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Enrollment Key</label>
+                <input 
+                  type="password" 
+                  placeholder="Enter secret key"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500 transition-all placeholder-zinc-600"
+                  value={addForm.key}
+                  onChange={e => setAddForm({ ...addForm, key: e.target.value })}
+                  required
+                />
+              </div>
+
+              {addError && <p className="text-red-400 text-xs font-medium bg-red-400/10 p-2.5 rounded border border-red-400/20">{addError}</p>}
+              
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="submit" 
+                  disabled={addLoading}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {addLoading ? 'Verifying...' : 'Unlock Workspace'}
                 </button>
               </div>
-              <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-                You are requesting to enroll in <strong className="text-white">{selectedCourse.code} - {selectedCourse.title}</strong>. 
-                Please enter the secret enrollment key provided by your instructor.
-              </p>
-              
-              <form onSubmit={confirmEnrollment} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Enrollment Key</label>
-                  <input 
-                    type="text" 
-                    value={courseKey}
-                    onChange={(e) => setCourseKey(e.target.value)}
-                    placeholder="e.g. SP2024-SEC1"
-                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-4 py-3.5 text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono tracking-widest uppercase"
-                  />
-                </div>
-                
-                {enrollError && <p className="text-red-400 text-xs font-bold bg-red-500/10 p-2 rounded-lg border border-red-500/20">{enrollError}</p>}
-                
-                <div className="flex gap-3 pt-4">
-                  <button type="button" onClick={() => setEnrollModalOpen(false)} className="flex-1 py-3.5 px-4 rounded-xl font-bold text-gray-400 bg-gray-800 hover:text-white hover:bg-gray-700 transition-colors">
-                    Cancel
-                  </button>
-                  <button type="submit" disabled={enrollLoadingId === selectedCourse.id} className="flex-1 py-3.5 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20 flex justify-center items-center gap-2">
-                    {enrollLoadingId === selectedCourse.id ? 'Verifying...' : 'Unlock Course'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            </form>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
     </div>
   );
 }
