@@ -12,7 +12,6 @@ import FacultyDashboard from './pages/FacultyDashboard';
 import AssignmentsPage from './pages/AssignmentsPage';
 import DiscussionPortalPage from './pages/DiscussionPortalPage';
 import FacultyGradingPage from './pages/FacultyGradingPage';
-import AcademicProgressPage from './pages/AcademicProgressPage';
 import DashboardPage from './pages/DashboardPage';
 import CourseDetailBoard from './pages/CourseDetailBoard';
 import FacultyCourseBoard from './pages/FacultyCourseBoard';
@@ -79,7 +78,6 @@ export default function App() {
         <Route path="/courses/:courseId" element={<ProtectedRoute role="student"><MainLayout><CourseDetailBoard /></MainLayout></ProtectedRoute>} />
         <Route path="/tasks" element={<ProtectedRoute role="student"><MainLayout><TasksPage /></MainLayout></ProtectedRoute>} />
         <Route path="/assignments" element={<ProtectedRoute role="student"><MainLayout><TasksPage /></MainLayout></ProtectedRoute>} />
-        <Route path="/progress" element={<ProtectedRoute role="student"><MainLayout><AcademicProgressPage /></MainLayout></ProtectedRoute>} />
         <Route path="/discussions" element={<ProtectedRoute><MainLayout><DiscussionPortalPage /></MainLayout></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><MainLayout><ProfilePage /></MainLayout></ProtectedRoute>} />
         <Route path="/faculty/grading/:assignmentId" element={<ProtectedRoute role="faculty"><MainLayout><FacultyGradingWrapper /></MainLayout></ProtectedRoute>} />

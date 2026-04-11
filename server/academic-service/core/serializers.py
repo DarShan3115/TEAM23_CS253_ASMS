@@ -18,6 +18,10 @@ class ScheduleSerializer(serializers.ModelSerializer):
     Custom serializer to format data for the 'Today's Classes' 
     section on the React Dashboard.
     """
+    id = serializers.ReadOnlyField(source='course.id') # Maps to the actual Course UUID
+    code = serializers.ReadOnlyField(source='course.code')
+    credits = serializers.ReadOnlyField(source='course.credits')
+    semester = serializers.ReadOnlyField(source='course.semester')
     title = serializers.ReadOnlyField(source='course.title')
     instructor = serializers.SerializerMethodField()
     room = serializers.CharField(default="TBD") 
@@ -25,7 +29,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Enrollment
-        fields = ['id', 'title', 'instructor', 'room', 'time']
+        fields = ['id', 'code', 'title', 'instructor', 'room', 'time', 'credits', 'semester']
 
     def get_instructor(self, obj):
         instr = obj.course.instructor

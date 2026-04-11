@@ -4,7 +4,10 @@ from rest_framework import status
 from django.db import connection
 from .models import Enrollment, Course, User
 from .serializers import ScheduleSerializer, CourseSerializer, FacultyCourseSerializer
+from django.core.exceptions import ValidationError
 import uuid
+import csv
+import io
 
 class MyScheduleView(APIView):
     """
@@ -47,6 +50,38 @@ class CourseEnrollView(APIView):
 
         except Course.DoesNotExist:
             return Response({"message": "Course not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class CourseEnrollByCodeView(APIView):
+    """
+    POST /api/courses/enroll-by-code/
+    Finds course by code (e.g. CS253) and verifies entry key.
+    """
+    def post(self, request):
+        student_id = request.headers.get('x-user-id')
+        course_code = request.data.get('course_code')
+        provided_key = request.data.get('enrollment_key')
+
+        if not all([student_id, course_code, provided_key]):
+            return Response({"message": "Both course code and key are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Case-insensitive match on course code
+            course = Course.objects.get(code__iexact=course_code, is_active=True)
+            
+            # Check Enrollment Key
+            if course.enrollment_key and course.enrollment_key != provided_key:
+                return Response({"message": "Invalid Enrollment Key for this course."}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Check for existing enrollment
+            if Enrollment.objects.filter(student_id=student_id, course_id=course.id).exists():
+                return Response({"message": "You are already enrolled in this course."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create Enrollment
+            Enrollment.objects.create(student_id=student_id, course_id=course.id)
+            return Response({"message": f"Successfully enrolled in {course.code}"}, status=status.HTTP_201_CREATED)
+
+        except Course.DoesNotExist:
+            return Response({"message": f"Course code '{course_code}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class CourseListView(APIView):
     """
@@ -129,23 +164,77 @@ class MarkAttendanceView(APIView):
 
         return Response({"message": f"Attendance saved for {saved} students on {date}"}, status=status.HTTP_201_CREATED)
 
+class MarkAttendanceCSVView(APIView):
+    """
+    POST /api/attendance/mark/csv/
+    Expects form-data with 'course_id', 'date', and 'file' (CSV).
+    CSV format must include columns: student_id, status
+    """
+    def post(self, request):
+        course_id = request.data.get('course_id')
+        date = request.data.get('date')
+        file_obj = request.FILES.get('file')
+
+        if not all([course_id, date, file_obj]):
+            return Response({"error": "course_id, date, and file are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_obj.name.endswith('.csv'):
+            return Response({"error": "File must be a CSV format"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            decoded_file = file_obj.read().decode('utf-8')
+            io_string = io.StringIO(decoded_file)
+            reader = csv.DictReader(io_string)
+            
+            saved = 0
+            with connection.cursor() as cur:
+                for row in reader:
+                    student_id = row.get('student_id')
+                    status_val = row.get('status', 'present').lower()
+                    
+                    if not student_id:
+                        continue
+                        
+                    try:
+                        cur.execute("""
+                            INSERT INTO attendance (id, course_id, student_id, date, status)
+                            VALUES (uuid_generate_v4(), %s, %s, %s, %s)
+                            ON CONFLICT (course_id, student_id, date)
+                            DO UPDATE SET status = EXCLUDED.status
+                        """, [course_id, student_id, date, status_val])
+                        saved += 1
+                    except Exception:
+                        pass # Skip invalid rows or invalid UUIDs
+
+            return Response({"message": f"Attendance saved for {saved} students from CSV on {date}"}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": f"Error processing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class CourseDetailView(APIView):
     """GET /api/courses/<course_id>/"""
     def get(self, request, course_id):
+        course = None
         try:
+            # 1. Try fetching by exact UUID
             course = Course.objects.get(id=course_id)
-            data = {
-                'id': str(course.id),
-                'code': course.code,
-                'title': course.title,
-                'credits': course.credits,
-                'semester': course.semester,
-                'instructor_name': f"{course.instructor.first_name} {course.instructor.last_name}" if course.instructor else "Staff",
-            }
-            return Response(data)
-        except Course.DoesNotExist:
-            return Response({"error": "Course not found"}, status=status.HTTP_404_NOT_FOUND)
+        except (Course.DoesNotExist, ValueError, ValidationError):
+            # 2. Fallback: Try fetching by code (like 'CS253') if ID isn't a valid UUID or not found
+            course = Course.objects.filter(code__iexact=course_id).first()
+        
+        if not course:
+            return Response({"error": f"Course '{course_id}' not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        data = {
+            'id': str(course.id),
+            'code': course.code,
+            'title': course.title,
+            'credits': course.credits,
+            'semester': course.semester,
+            'description': course.description,
+            'instructor_name': f"{course.instructor.first_name} {course.instructor.last_name}" if course.instructor else "Staff",
+        }
+        return Response(data)
 
 
 class CourseStudentsView(APIView):

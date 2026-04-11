@@ -4,6 +4,7 @@
 
 -- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ── Users ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     content         TEXT,
     file_url        TEXT,
     marks           INTEGER,
+    grade           NUMERIC,
     feedback        TEXT,
     submitted_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     UNIQUE(assignment_id, student_id)
@@ -147,8 +149,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     description     TEXT,
     due_date        DATE,
     due_time        TIME,
+    course_id       UUID REFERENCES courses(id),
     course_tag      VARCHAR(6),
     custom_tag      VARCHAR(50),
+    priority        VARCHAR(20) DEFAULT 'Medium',
+    status          VARCHAR(20) DEFAULT 'Active',
     is_completed    BOOLEAN DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -161,33 +166,80 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_course  ON enrollments(course_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_course   ON attendance(course_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_assign  ON submissions(assignment_id);
 
--- ── Seed admin user (password: admin123) ────────────────────────────────────
--- bcrypt hash of 'admin123' with 10 rounds
-INSERT INTO users (email, password_hash, first_name, last_name, role)
-VALUES (
-    'admin@asms.edu',
-    '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36PQm4y6BkG6qKz.YBv.q6i',
-    'System',
-    'Admin',
-    'admin'
-) ON CONFLICT (email) DO NOTHING;
+-- ── 1. Base Users (Explicit UUIDs for relational mapping) ───────────────────
+INSERT INTO users (id, email, password_hash, first_name, last_name, role) VALUES 
+    ('a0000000-0000-0000-0000-000000000001', 'admin@iitk.ac.in', crypt('Admin@123', gen_salt('bf', 10)), 'System', 'Admin', 'admin'),
+    ('50000000-0000-0000-0000-000000000001', 'student@iitk.ac.in', crypt('Student@123', gen_salt('bf', 10)), 'Jane', 'Doe', 'student'),
+    ('f0000000-0000-0000-0000-000000000001', 'faculty@iitk.ac.in', crypt('Faculty@123', gen_salt('bf', 10)), 'John', 'Smith', 'faculty')
+ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id, password_hash = EXCLUDED.password_hash;
 
--- ── Seed sample student (password: student123) ──────────────────────────────
-INSERT INTO users (email, password_hash, first_name, last_name, role)
-VALUES (
-    'student@asms.edu',
-    '$2b$10$7R9ia3lS7Y36Zp8B6C/I9.8tVv9S/0S8G5z1Yx8Z0iV7p1S0y2m2.', -- hash of 'student123'
-    'Jane',
-    'Doe',
-    'student'
-) ON CONFLICT (email) DO NOTHING;
+-- ── Grade Point / CPI Calculation View ──────────────────────────────────────
+-- Calculates CPI strictly using the standard 10-point institute scale
+CREATE OR REPLACE VIEW student_cpi_view AS
+SELECT
+    student_id,
+    SUM(c.credits * CASE e.grade
+        WHEN 'A*' THEN 10
+        WHEN 'A'  THEN 10
+        WHEN 'B+' THEN 9
+        WHEN 'B'  THEN 8
+        WHEN 'C+' THEN 7
+        WHEN 'C'  THEN 6
+        WHEN 'D+' THEN 5
+        WHEN 'D'  THEN 4
+        WHEN 'E'  THEN 0
+        WHEN 'F'  THEN 0
+        ELSE 0 END) / NULLIF(SUM(c.credits), 0) AS cpi
+FROM enrollments e
+JOIN courses c ON e.course_id = c.id
+WHERE e.status = 'completed' AND e.grade IS NOT NULL
+GROUP BY student_id;
 
--- ── Seed sample faculty (password: faculty123) ──────────────────────────────
-INSERT INTO users (email, password_hash, first_name, last_name, role)
-VALUES (
-    'faculty@asms.edu',
-    '$2b$10$K0WvH8YfSjI0gE3p0V9OLeV7u8S9G5z1Yx8Z0iV7p1S0y2m2.', -- hash of 'faculty123'
-    'John',
-    'Smith',
-    'faculty'
-) ON CONFLICT (email) DO NOTHING;
+-- ── Comprehensive Mock Data for Student Testing ─────────────────────────────
+-- 2. Departments
+INSERT INTO departments (id, name, code, head_id) VALUES 
+    ('d0000000-0000-0000-0000-000000000001', 'Computer Science and Engineering', 'CSE', 'f0000000-0000-0000-0000-000000000001'),
+    ('d0000000-0000-0000-0000-000000000002', 'Electrical Engineering', 'EE', NULL),
+    ('d0000000-0000-0000-0000-000000000003', 'Mechanical Engineering', 'ME', NULL),
+    ('d0000000-0000-0000-0000-000000000004', 'Aerospace Engineering', 'AE', NULL),
+    ('d0000000-0000-0000-0000-000000000005', 'Chemical Engineering', 'CHE', NULL)
+ON CONFLICT (code) DO NOTHING;
+
+-- 3. Courses
+INSERT INTO courses (id, code, title, description, credits, department_id, instructor_id, semester, enrollment_key) VALUES 
+    ('c0000000-0000-0000-0000-000000000001', 'CS253', 'Software Development and Engineering', 'Introduction to SDLC.', 4, 'd0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', '2024-II', '1234'),
+    ('c0000000-0000-0000-0000-000000000002', 'CS340', 'Operating Systems', 'Kernel, threads, concurrency.', 4, 'd0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', '2023-I', '1234')
+ON CONFLICT (code) DO NOTHING;
+
+-- 4. Enrollments
+INSERT INTO enrollments (student_id, course_id, status, grade) VALUES
+    ('50000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000002', 'completed', 'A'),
+    ('50000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'enrolled', NULL)
+ON CONFLICT (student_id, course_id) DO NOTHING;
+
+-- 5. Attendance
+INSERT INTO attendance (course_id, student_id, date, status) VALUES
+    ('c0000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', CURRENT_DATE - INTERVAL '1 day', 'present'),
+    ('c0000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', CURRENT_DATE - INTERVAL '2 days', 'present'),
+    ('c0000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', CURRENT_DATE - INTERVAL '3 days', 'absent')
+ON CONFLICT (course_id, student_id, date) DO NOTHING;
+
+-- 6. Assignments
+INSERT INTO assignments (id, course_id, title, description, due_date, max_marks, weightage) VALUES
+    ('a5500000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Assignment 1: Git and GitHub', 'Submit the link to your repository.', CURRENT_DATE + INTERVAL '5 days', 100, 10),
+    ('a5500000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Midterm Project', 'Design Document PDF.', CURRENT_DATE + INTERVAL '14 days', 100, 20)
+ON CONFLICT (id) DO NOTHING;
+
+-- 7. Submissions
+INSERT INTO submissions (assignment_id, student_id, content, marks, feedback) VALUES
+    ('a5500000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 'https://github.com/janedoe/cs253-assign1', 95, 'Excellent work.')
+ON CONFLICT (assignment_id, student_id) DO NOTHING;
+
+-- 8. Productivity Tasks
+INSERT INTO tasks (user_id, title, description, due_date, course_tag, priority, status) VALUES
+    ('50000000-0000-0000-0000-000000000001', 'Study for Midterm', 'Review chapters 1-4', CURRENT_DATE + INTERVAL '2 days', 'CS253', 'High', 'Active'),
+    ('50000000-0000-0000-0000-000000000001', 'Submit Assignment 1', 'Upload to portal', CURRENT_DATE + INTERVAL '1 day', 'CS253', 'Medium', 'Completed');
+
+-- 9. Notices
+INSERT INTO notices (title, body, author_id, target_role) VALUES
+    ('Welcome to the New Semester', 'Please check your course schedules and familiarize yourself with the platform.', 'a0000000-0000-0000-0000-000000000001', 'all');

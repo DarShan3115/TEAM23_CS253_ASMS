@@ -3,13 +3,15 @@ from .views import (
     MyScheduleView, CourseListView, FacultyLoadView, CourseEnrollView,
     CourseDetailView, CourseStudentsView,
     CourseAnnouncementsView, CourseResourcesView, ResourceDeleteView,
-    CourseAssignmentsView, MarkAttendanceView, UpdateFinalGradeView
+    CourseAssignmentsView, MarkAttendanceView, UpdateFinalGradeView,
+    CourseEnrollByCodeView
 )
 
 urlpatterns = [
     # Student
     path('courses/my-schedule/', MyScheduleView.as_view(), name='my-schedule'),
     path('courses/enroll/', CourseEnrollView.as_view(), name='enroll'),
+    path('courses/enroll-by-code/', CourseEnrollByCodeView.as_view(), name='enroll-by-code'),
     path('courses/', CourseListView.as_view(), name='course-list'),
 
     # Faculty

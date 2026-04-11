@@ -8,7 +8,6 @@ const navConfig = {
     { label: 'Dashboard',        path: '/dashboard', icon: LayoutDashboard },
     { label: 'My Courses',       path: '/courses',   icon: BookOpen },
     { label: 'Task Management',  path: '/tasks',      icon: ClipboardList },
-    { label: 'Academic Progress',path: '/progress',   icon: BarChart3 },
     { label: 'My Profile',       path: '/profile',   icon: User },
   ],
   faculty: [

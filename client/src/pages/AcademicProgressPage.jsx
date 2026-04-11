@@ -51,7 +51,7 @@ export default function AcademicProgressPage() {
                 <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
                   <div className="space-y-4 text-center md:text-left">
                     <h2 className="text-2xl font-black text-white">Dean's List Eligible!</h2>
-                    <p className="text-blue-100 text-sm max-w-sm">Your current GPA of 3.85 puts you in the top 5% of your class. Keep up the consistent attendance!</p>
+                    <p className="text-blue-100 text-sm max-w-sm">Your current CPI of 9.20 puts you in the top 5% of your class. Keep up the consistent attendance!</p>
                     <button className="bg-white text-blue-600 px-6 py-2.5 rounded-xl font-black text-sm hover:bg-blue-50 transition-all flex items-center gap-2 mx-auto md:mx-0">
                       View Certificate <ChevronRight size={16} />
                     </button>
@@ -75,13 +75,13 @@ export default function AcademicProgressPage() {
 
           <div className="bg-gray-800/50 border border-gray-700 rounded-3xl p-6 flex flex-col justify-between">
              <div className="flex items-center justify-between">
-                <h3 className="text-white font-bold text-sm">Target GPA</h3>
+                <h3 className="text-white font-bold text-sm">Target CPI</h3>
                 <Info size={16} className="text-gray-500" />
              </div>
              <div className="my-6">
                 <div className="flex items-end gap-2 mb-2">
-                   <span className="text-4xl font-black text-white">3.90</span>
-                   <span className="text-green-400 text-xs font-bold pb-1">+0.05 needed</span>
+                   <span className="text-4xl font-black text-white">9.50</span>
+                   <span className="text-green-400 text-xs font-bold pb-1">+0.30 needed</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
                    <div className="bg-blue-500 h-2 rounded-full w-[94%]"></div>

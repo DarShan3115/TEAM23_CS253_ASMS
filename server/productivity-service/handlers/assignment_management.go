@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"net/http"
-	"github.com/gin-gonic/gin"
+
 	"github.com/DarShan3115/TEAM23_CS253_ASMS/server/productivity-service/models"
+	"github.com/gin-gonic/gin"
 )
 
 // UpdateSubmissionGrade allows faculty to grade a student's work
@@ -40,7 +41,7 @@ func (h *SubmissionHandler) UpdateSubmissionGrade(c *gin.Context) {
 // GetSubmissionsByAssignment returns all student work for a specific task
 func (h *SubmissionHandler) GetSubmissionsByAssignment(c *gin.Context) {
 	assignmentID := c.Param("assignmentId")
-	
+
 	var submissions []models.Submission
 	if err := h.DB.Where("assignment_id = ?", assignmentID).Find(&submissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch submissions"})

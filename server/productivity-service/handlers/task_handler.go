@@ -41,6 +41,29 @@ func (h *TaskHandler) GetUserTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
+// GetCourseTasks returns all assignments/tasks linked to a specific course
+func (h *TaskHandler) GetCourseTasks(c *gin.Context) {
+	courseIDStr := c.Param("courseId")
+	if courseIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Course ID required"})
+		return
+	}
+
+	courseID, err := uuid.Parse(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Course ID"})
+		return
+	}
+
+	var tasks []models.Task
+	if err := h.DB.Where("course_id = ?", courseID).Order("created_at desc").Find(&tasks).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch course tasks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, tasks)
+}
+
 // CreateTask adds a new assignment
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task models.Task

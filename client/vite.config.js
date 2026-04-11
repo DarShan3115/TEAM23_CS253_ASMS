@@ -33,16 +33,15 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      '/api/v1': {
-        target: 'http://productivity-service:8080', // Use Docker service name
+      '/api/productivity': {
+        target: 'http://productivity-service:8080', 
         changeOrigin: true,
-        secure: false,
+        secure: false
       },
       '/api/academic': {
         target: 'http://academic-service:8000', // Use Docker service name and correct port
         changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api\/academic/, '/api')
+        secure: false
       },
     },
   }

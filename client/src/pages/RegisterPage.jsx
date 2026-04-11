@@ -37,7 +37,7 @@ export default function RegisterPage() {
     if (!form.email.endsWith('@iitk.ac.in')) {
       return setLocalError('Email must be a valid @iitk.ac.in address.');
     }
-    const pwdRx = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const pwdRx = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
     if (!pwdRx.test(form.password)) {
       return setLocalError('Password needs 8+ chars, uppercase, lowercase, number, and special character.');
     }

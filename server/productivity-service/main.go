@@ -62,7 +62,7 @@ func main() {
 	discussionHandler := handlers.NewDiscussionHandler(db)
 	submissionHandler := handlers.NewSubmissionHandler(db)
 
-	v1 := r.Group("/api/v1")
+	v1 := r.Group("/api/productivity/v1")
 	{
 		v1.GET("/ping", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
@@ -75,6 +75,7 @@ func main() {
 		v1.POST("/tasks", taskHandler.CreateTask)
 		v1.PUT("/tasks/:taskId", taskHandler.UpdateTask)
 		v1.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
+		v1.GET("/courses/:courseId/tasks", taskHandler.GetCourseTasks)
 
 		// Discussions APIs
 		v1.GET("/discussions/:courseId", discussionHandler.GetDiscussions)

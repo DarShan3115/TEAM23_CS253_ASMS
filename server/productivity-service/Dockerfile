@@ -1,22 +1,18 @@
-# Use the official Golang image that matches our go.mod version
+# Step 1: Build Stage
 FROM golang:1.25-alpine AS build
 
-# Install build dependencies
-RUN apk add --no-cache gcc musl-dev
-
+# No need for gcc/musl-dev if we disable CGO
 WORKDIR /app
 
-# Copy dependency files first for better caching
+# Cache dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the source code
+# Copy source and build
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
-# Build the application
-RUN go build -o main .
-
-# Final stage: minimal runtime image
+# Step 2: Final Stage (Minimal Image)
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 

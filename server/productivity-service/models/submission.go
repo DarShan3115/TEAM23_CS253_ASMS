@@ -12,6 +12,7 @@ type Submission struct {
 	Content      string    `gorm:"type:text" json:"content"`
 	FileURL      string    `gorm:"type:text" json:"file_url"`
 	Marks        *int      `gorm:"type:integer" json:"marks"`       // nullable until graded
+	Grade        *float64  `gorm:"type:numeric" json:"grade"`
 	Feedback     string    `gorm:"type:text" json:"feedback"`
 	SubmittedAt  time.Time `json:"submitted_at"`
 }
