@@ -47,7 +47,10 @@ router.get('/me', auth, usersController.getProfile);
 // PUT /api/users/profile - Update personal info
 router.put('/profile', auth, usersController.updateProfile);
 
-// PUT /api/users/change-password - Update password
+// POST /api/users/send-change-otp - Send OTP for password change verification
+router.post('/send-change-otp', auth, usersController.sendChangePasswordOtp);
+
+// PUT /api/users/change-password - Update password (requires OTP)
 router.put('/change-password', auth, usersController.changePassword);
 
 // POST /api/users/avatar - Upload avatar image

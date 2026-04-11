@@ -33,7 +33,7 @@ func (h *TaskHandler) GetUserTasks(c *gin.Context) {
 	}
 
 	var tasks []models.Task
-	if err := h.DB.Where("student_id = ?", userID).Find(&tasks).Error; err != nil {
+	if err := h.DB.Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch tasks"})
 		return
 	}
@@ -49,10 +49,49 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
+	userIDStr := c.GetHeader("x-user-id")
+	if userIDStr != "" {
+		if uid, err := uuid.Parse(userIDStr); err == nil {
+			task.UserID = uid
+		}
+	}
+
 	if err := h.DB.Create(&task).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create task"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, task)
+}
+
+// UpdateTask handles toggling completions and tags
+func (h *TaskHandler) UpdateTask(c *gin.Context) {
+	taskID := c.Param("taskId")
+	var task models.Task
+	if err := h.DB.First(&task, "id = ?", taskID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.DB.Save(&task).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not update task"})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
+}
+
+// DeleteTask handles removal
+func (h *TaskHandler) DeleteTask(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if err := h.DB.Delete(&models.Task{}, "id = ?", taskID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not delete task"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
 }

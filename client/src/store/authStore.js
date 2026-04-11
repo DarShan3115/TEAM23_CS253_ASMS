@@ -35,6 +35,19 @@ export const useAuthStore = create((set) => ({
     }
   },
 
+  requestOtp: async (email, phone) => {
+    set({ loading: true, error: null });
+    try {
+      await api.post('/api/auth/send-otp', { email, phone });
+      set({ loading: false });
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to send OTP';
+      set({ error: errorMsg, loading: false });
+      return { success: false, error: errorMsg };
+    }
+  },
+
   register: async (userData) => {
     set({ loading: true, error: null });
     try {
@@ -51,9 +64,40 @@ export const useAuthStore = create((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } catch(e) {
+      console.warn("Logout ping failed");
+    }
     localStorage.clear();
     set({ user: null, token: null, isAuthenticated: false });
+  },
+
+  requestPasswordReset: async (email) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.post('/api/auth/forgot-password/request', { email });
+      set({ loading: false });
+      return { success: true, message: response.data.message };
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to request password reset';
+      set({ error: errorMsg, loading: false });
+      return { success: false, error: errorMsg };
+    }
+  },
+
+  resetPassword: async (email, otp, newPassword) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.post('/api/auth/forgot-password/reset', { email, otp, newPassword });
+      set({ loading: false });
+      return { success: true, message: response.data.message };
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to reset password';
+      set({ error: errorMsg, loading: false });
+      return { success: false, error: errorMsg };
+    }
   },
   
   clearError: () => set({ error: null })

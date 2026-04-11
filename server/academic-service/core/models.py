@@ -37,6 +37,7 @@ class Course(models.Model):
     semester = models.CharField(max_length=20)
     max_enrollment = models.IntegerField(default=60)
     is_active = models.BooleanField(default=True)
+    enrollment_key = models.CharField(max_length=50, default='1234')
 
     class Meta:
         managed = False

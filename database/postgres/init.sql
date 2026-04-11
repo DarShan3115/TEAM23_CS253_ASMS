@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
     role            VARCHAR(20)  NOT NULL DEFAULT 'student'
                         CHECK (role IN ('student','faculty','admin')),
     phone           VARCHAR(20),
+    avatar_url      TEXT,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    failed_login_attempts INTEGER DEFAULT 0,
+    locked_until    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -32,7 +35,7 @@ CREATE TABLE IF NOT EXISTS departments (
 -- ── Courses ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS courses (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    code            VARCHAR(20)  UNIQUE NOT NULL,
+    code            VARCHAR(20)  UNIQUE NOT NULL, -- Serves as the unique hashtag e.g. CS253
     title           VARCHAR(255) NOT NULL,
     description     TEXT,
     credits         INTEGER      NOT NULL DEFAULT 3 CHECK (credits > 0),
@@ -41,6 +44,7 @@ CREATE TABLE IF NOT EXISTS courses (
     semester        VARCHAR(20)  NOT NULL,
     max_enrollment  INTEGER      NOT NULL DEFAULT 60,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    enrollment_key  VARCHAR(50)  NOT NULL DEFAULT '1234', -- Mock default for bypass
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -65,6 +69,18 @@ CREATE TABLE IF NOT EXISTS assignments (
     description     TEXT,
     due_date        TIMESTAMPTZ,
     max_marks       INTEGER      NOT NULL DEFAULT 100,
+    weightage       INTEGER      NOT NULL DEFAULT 10, -- Marks overall weight out of 100%
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ── Resources ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS resources (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    uploader_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    title           VARCHAR(255) NOT NULL,
+    resource_type   VARCHAR(20)  NOT NULL DEFAULT 'other' CHECK (resource_type IN ('lecture', 'other')),
+    file_url        TEXT,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -73,6 +89,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     assignment_id   UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
     student_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content         TEXT,
     file_url        TEXT,
     marks           INTEGER,
     feedback        TEXT,
@@ -98,6 +115,41 @@ CREATE TABLE IF NOT EXISTS notices (
     body            TEXT NOT NULL,
     author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     target_role     VARCHAR(20) DEFAULT 'all',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Course Announcements ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_announcements (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    title           VARCHAR(255) NOT NULL,
+    body            TEXT NOT NULL,
+    author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Discussions ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS discussions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content         TEXT NOT NULL,
+    is_anonymous    BOOLEAN DEFAULT TRUE,
+    votes           INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Tasks (Checklist) ───────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tasks (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT,
+    due_date        DATE,
+    due_time        TIME,
+    course_tag      VARCHAR(6),
+    custom_tag      VARCHAR(50),
+    is_completed    BOOLEAN DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

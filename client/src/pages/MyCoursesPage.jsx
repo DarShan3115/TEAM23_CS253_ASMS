@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CourseGrid from '../components/organisms/CourseGrid';
-import axios from 'axios';
+import api from '../services/api';
 import { 
   Search, 
   Filter, 
@@ -48,12 +48,9 @@ export default function MyCoursesPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'x-auth-token': token };
-
       const [courseRes, enrollRes] = await Promise.all([
-        axios.get(`${ACADEMIC_API}/courses/`, { headers }),
-        axios.get(`${ACADEMIC_API}/courses/my-schedule/`, { headers })
+        api.get(`${ACADEMIC_API}/courses/`),
+        api.get(`${ACADEMIC_API}/courses/my-schedule/`)
       ]);
 
       setCourses(courseRes.data?.length ? courseRes.data : DUMMY_COURSES);
@@ -88,7 +85,7 @@ export default function MyCoursesPage() {
     try {
       // MOCK MODE FALLBACK CHECK
       if (selectedCourse.id.startsWith('mock-')) {
-        await new Promise(r => setTimeout(r, 800)); // Simulate network delay
+        await new Promise(r => setTimeout(r, 800));
         if (courseKey === '1234') {
           setEnrollments([...enrollments, { course_id: selectedCourse.id, status: 'enrolled' }]);
           setEnrollModalOpen(false);
@@ -99,12 +96,11 @@ export default function MyCoursesPage() {
         return;
       }
 
-      const token = localStorage.getItem('token');
-      await axios.post(`${ACADEMIC_API}/courses/enroll/`, { 
+      await api.post(`${ACADEMIC_API}/courses/enroll/`, {
         course_id: selectedCourse.id,
-        course_key: courseKey 
-      }, { headers: { 'x-auth-token': token } });
-      
+        course_key: courseKey
+      });
+
       setEnrollments([...enrollments, { course_id: selectedCourse.id, status: 'enrolled' }]);
       setEnrollModalOpen(false);
     } catch (err) {
@@ -175,7 +171,6 @@ export default function MyCoursesPage() {
               courses={filteredCourses} 
               enrollments={enrollments} 
               onEnroll={handleEnrollClick}
-              loadingId={enrollLoadingId}
             />
           ) : (
             <div className="py-20 text-center flex flex-col items-center">

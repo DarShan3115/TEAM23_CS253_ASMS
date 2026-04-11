@@ -14,7 +14,12 @@ export default defineConfig({
         secure: false,
       },
       '/api/users': {
-        target: 'http://auth-service:5001', // Use Docker service name
+        target: 'http://auth-service:5001',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/admin': {
+        target: 'http://auth-service:5001',
         changeOrigin: true,
         secure: false,
       },
