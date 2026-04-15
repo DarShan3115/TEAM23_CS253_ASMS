@@ -108,7 +108,6 @@ export default function TasksPage() {
                  </thead>
                  <tbody className="text-white divide-y divide-zinc-800/50">
                     {displayedTasks.map(task => (
-                      <tr key={task.id} className={`hover:bg-zinc-800/50 transition-colors ${task.isCompleted ? 'opacity-50' : ''}`}>
                       <tr 
                          key={task.id} 
                          className={`hover:bg-zinc-800/50 transition-colors ${task.isCompleted ? 'opacity-50' : ''}`}
