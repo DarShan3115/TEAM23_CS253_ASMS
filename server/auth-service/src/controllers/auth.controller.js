@@ -31,17 +31,56 @@ function issueTokens(user, res) {
     return accessToken;
 }
 
+// ── CHECK IF USER EXISTS (FOR REAL-TIME UI VALIDATION) ────────────────────────
+exports.checkExists = async (req, res) => {
+    let { email, phone } = req.query;
+    
+    try {
+        if (!email && !phone) return res.json({ exists: false });
+
+        const params = [];
+        const conditions = [];
+
+        if (email) {
+            params.push(email.trim().toLowerCase());
+            conditions.push(`email ILIKE $${params.length}`);
+        }
+        if (phone) {
+            params.push(phone.trim());
+            conditions.push(`phone = $${params.length}`);
+        }
+
+        const exists = await query(`SELECT id FROM users WHERE ${conditions.join(' OR ')}`, params);
+        if (exists.rows.length > 0) {
+            return res.json({ exists: true, message: 'An account with this email or phone number already exists.' });
+        }
+        res.json({ exists: false });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Failed to check availability.' });
+    }
+};
+
 // ── SEND REGISTRATION OTP ─────────────────────────────────────────────────────
 exports.sendOtp = async (req, res) => {
-    const { email, phone } = req.body;
+    let { email, phone } = req.body;
     try {
         if (!email || !phone) {
             return res.status(400).json({ error: 'Email and phone are required.' });
         }
 
+        email = email.trim().toLowerCase();
+        phone = phone.trim();
+
         // ── Enforce @iitk.ac.in ──
         if (!isIITKEmail(email)) {
             return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
+        }
+
+        // ── Early Duplicate Check ──
+        const exists = await query('SELECT id FROM users WHERE email ILIKE $1 OR phone = $2', [email, phone]);
+        if (exists.rows.length > 0) {
+            return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
         }
 
         const emailOtp = genOTP();
@@ -71,9 +110,12 @@ exports.sendOtp = async (req, res) => {
 
 // ── USER REGISTRATION ─────────────────────────────────────────────────────────
 exports.register = async (req, res) => {
-    const { first_name, last_name, email, password, role, phone, emailOtp, phoneOtp } = req.body;
+    let { first_name, last_name, email, password, role, phone, emailOtp, phoneOtp } = req.body;
 
     try {
+        email = email.trim().toLowerCase();
+        phone = phone.trim();
+
         // ── Enforce @iitk.ac.in (server-side) ──
         if (!isIITKEmail(email)) {
             return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
@@ -91,9 +133,9 @@ exports.register = async (req, res) => {
         }
 
         // ── Duplicate check ──
-        const exists = await query('SELECT id FROM users WHERE email = $1', [email]);
+        const exists = await query('SELECT id FROM users WHERE email ILIKE $1 OR phone = $2', [email, phone]);
         if (exists.rows.length > 0) {
-            return res.status(400).json({ error: 'An account with this email already exists.' });
+            return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
         }
 
         // ── Create user ──
@@ -118,15 +160,17 @@ exports.register = async (req, res) => {
 
 // ── USER LOGIN ────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     try {
+        email = email.trim().toLowerCase();
+
         // ── Enforce @iitk.ac.in at login too ──
         if (!isIITKEmail(email)) {
             return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
         }
 
-        const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await query('SELECT * FROM users WHERE email ILIKE $1', [email]);
         if (userResult.rows.length === 0) {
             return res.status(400).json({ error: 'Invalid credentials.' });
         }
@@ -178,14 +222,15 @@ exports.login = async (req, res) => {
 
 // ── FORGOT PASSWORD REQUEST ───────────────────────────────────────────────────
 exports.forgotPasswordRequest = async (req, res) => {
-    const { email } = req.body;
+    let { email } = req.body;
     try {
         if (!email) return res.status(400).json({ error: 'Email is required.' });
+        email = email.trim().toLowerCase();
         if (!isIITKEmail(email)) {
             return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
         }
 
-        const userCheck = await query('SELECT id FROM users WHERE email = $1', [email]);
+        const userCheck = await query('SELECT id FROM users WHERE email ILIKE $1', [email]);
         // Respond 200 even if user not found — prevents email enumeration
         if (userCheck.rows.length === 0) {
             return res.json({ message: 'If this email is registered, a reset OTP has been sent.' });
@@ -210,11 +255,12 @@ exports.forgotPasswordRequest = async (req, res) => {
 
 // ── RESET PASSWORD ────────────────────────────────────────────────────────────
 exports.resetPassword = async (req, res) => {
-    const { email, otp, newPassword } = req.body;
+    let { email, otp, newPassword } = req.body;
     try {
         if (!email || !otp || !newPassword) {
             return res.status(400).json({ error: 'Email, OTP and new password are required.' });
         }
+        email = email.trim().toLowerCase();
 
         const storedData = resetOtpStore.get(email);
         if (!storedData || storedData.expiresAt < Date.now() || storedData.otp !== otp) {
@@ -222,7 +268,7 @@ exports.resetPassword = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE email = $2', [hashedPassword, email]);
+        await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE email ILIKE $2', [hashedPassword, email]);
         resetOtpStore.delete(email);
 
         res.json({ message: 'Password reset successfully. You can now log in.' });

@@ -4,6 +4,31 @@ import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 
+const inputClass = "w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all";
+const labelClass = "text-sm font-semibold text-zinc-400 mb-1 block";
+
+const PasswordInput = ({ value, onChange, show, onToggle, placeholder = '' }) => (
+  <div className="relative">
+    <input type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder}
+      className={inputClass + ' pr-12'} required />
+    <button type="button" onClick={onToggle} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
+  </div>
+);
+
+const Feedback = ({ msg }) => {
+  if (!msg.text) return null;
+  return (
+    <div className={`flex items-center gap-2 p-3 rounded-xl text-sm font-medium ${
+      msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+    }`}>
+      {msg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+      {msg.text}
+    </div>
+  );
+};
+
 export default function ProfilePage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('view');
@@ -160,33 +185,9 @@ export default function ProfilePage() {
     }
   };
 
-  const inputClass = "w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all";
-  const labelClass = "text-sm font-semibold text-zinc-400 mb-1 block";
   const tabClass = (id) => `text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
     activeTab === id ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30' : 'bg-zinc-900 text-zinc-500 border border-transparent hover:bg-zinc-800 hover:text-white'
   }`;
-
-  const PasswordInput = ({ value, onChange, show, onToggle, placeholder = '' }) => (
-    <div className="relative">
-      <input type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder}
-        className={inputClass + ' pr-12'} required />
-      <button type="button" onClick={onToggle} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-    </div>
-  );
-
-  const Feedback = ({ msg }) => {
-    if (!msg.text) return null;
-    return (
-      <div className={`flex items-center gap-2 p-3 rounded-xl text-sm font-medium ${
-        msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-      }`}>
-        {msg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-        {msg.text}
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8 font-sans">

@@ -11,7 +11,8 @@ import {
   FileText,
   AlertCircle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ArrowRight
 } from 'lucide-react';
 import api from '../services/api';
 
