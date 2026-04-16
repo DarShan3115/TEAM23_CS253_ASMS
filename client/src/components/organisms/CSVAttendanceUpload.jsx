@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Upload, Calendar, BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
+import api from '../../services/api';
+
+const ACADEMIC_API = import.meta.env.VITE_ACADEMIC_API_URL || '/api/academic';
 
 export default function CSVAttendanceUpload({ courses }) {
   const [file, setFile] = useState(null);
@@ -26,26 +29,18 @@ export default function CSVAttendanceUpload({ courses }) {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/api/attendance/mark/csv/', {
-        method: 'POST',
+      const response = await api.post(`${ACADEMIC_API}/attendance/mark/csv/`, formData, {
         headers: {
-          // Retrieve faculty user id dynamically from your auth state/localStorage
-          'x-user-id': localStorage.getItem('userId') || ''
-        },
-        body: formData,
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatus({ type: 'success', message: data.message || 'Attendance uploaded successfully!' });
-        setFile(null); // Reset input state
-        e.target.reset(); // Clear form
-      } else {
-        setStatus({ type: 'error', message: data.error || 'Failed to upload attendance.' });
-      }
+      setStatus({ type: 'success', message: response.data.message || 'Attendance uploaded successfully!' });
+      setFile(null);
+      e.target.reset();
     } catch (error) {
-      setStatus({ type: 'error', message: 'Network error occurred during upload.' });
+      const errMessage = error.response?.data?.error || 'Failed to upload attendance.';
+      setStatus({ type: 'error', message: errMessage });
     }
   };
 

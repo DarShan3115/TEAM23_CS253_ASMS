@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { randomInt } = require('crypto');
 const { query } = require('../config/db');
 const { otpStore } = require('../config/otpStore');
 const { sendEmail, sendSMS, otpEmailHtml } = require('../config/messaging');
@@ -9,18 +10,22 @@ const resetOtpStore = new Map();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const IITK_DOMAIN = '@iitk.ac.in';
+const IITK_DOMAIN = 'iitk.ac.in';
 
-/** Enforce institutional email format */
+/** Enforce institutional email — accepts any subdomain of iitk.ac.in */
 const isIITKEmail = (email) => typeof email === 'string' && email.toLowerCase().endsWith(IITK_DOMAIN);
 
-/** Generate a cryptographically safe 6-digit OTP string */
-const genOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+/** Generate a cryptographically secure 6-digit OTP string */
+const genOTP = () => randomInt(100000, 1000000).toString();
 
 /** Issue both JWTs; stores refresh token in HttpOnly cookie */
 function issueTokens(user, res) {
     const payload = { id: user.id, role: user.role };
-    const accessToken  = jwt.sign(payload, process.env.JWT_SECRET        || 'secret',         { expiresIn: '30m' });
+    
+    // Dynamic Expiry: Admins get 15m strictly, Students/Faculty get 1h
+    const tokenLife = user.role === 'admin' ? '15m' : '1h';
+    
+    const accessToken  = jwt.sign(payload, process.env.JWT_SECRET        || 'secret',         { expiresIn: tokenLife });
     const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET || 'refresh_secret', { expiresIn: '7d'  });
     res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
@@ -72,9 +77,9 @@ exports.sendOtp = async (req, res) => {
         email = email.trim().toLowerCase();
         phone = phone.trim();
 
-        // ── Enforce @iitk.ac.in ──
+        // ── Enforce iitk.ac.in domain ──
         if (!isIITKEmail(email)) {
-            return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
+            return res.status(400).json({ error: 'Only iitk.ac.in email addresses are permitted.' });
         }
 
         // ── Early Duplicate Check ──
@@ -116,9 +121,14 @@ exports.register = async (req, res) => {
         email = email.trim().toLowerCase();
         phone = phone.trim();
 
-        // ── Enforce @iitk.ac.in (server-side) ──
+        // ── Enforce iitk.ac.in domain (server-side) ──
         if (!isIITKEmail(email)) {
-            return res.status(400).json({ error: 'Only @iitk.ac.in email addresses are permitted.' });
+            return res.status(400).json({ error: 'Only iitk.ac.in email addresses are permitted.' });
+        }
+
+        // ── Block faculty/admin self-registration ──
+        if (role && (role === 'faculty' || role === 'admin')) {
+            return res.status(403).json({ error: 'Faculty and admin accounts must be created by a system administrator.' });
         }
 
         // ── Verify OTPs ──
@@ -138,13 +148,13 @@ exports.register = async (req, res) => {
             return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
         }
 
-        // ── Create user ──
+        // ── Create user — always 'student' on public registration ──
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await query(
             `INSERT INTO users (first_name, last_name, email, password_hash, role, phone)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id, email, first_name, last_name, role, phone, avatar_url, created_at`,
-            [first_name, last_name, email, hashedPassword, role || 'student', phone]
+            [first_name, last_name, email, hashedPassword, 'student', phone]
         );
 
         otpStore.delete(email);
@@ -300,4 +310,45 @@ exports.refreshToken = async (req, res) => {
 exports.logout = (req, res) => {
     res.clearCookie('refreshToken');
     res.json({ message: 'Logged out successfully.' });
+};
+// -- ADMIN: CREATE FACULTY / ADMIN ACCOUNT -------------------------------------
+// Called only by authenticated admins. Bypasses OTP � admin vouches for the user.
+exports.adminCreateUser = async (req, res) => {
+    let { first_name, last_name, email, password, role, phone } = req.body;
+
+    if (!first_name || !last_name || !email || !password) {
+        return res.status(400).json({ error: 'first_name, last_name, email and password are required.' });
+    }
+
+    email = email.trim().toLowerCase();
+
+    if (!isIITKEmail(email)) {
+        return res.status(400).json({ error: 'Only iitk.ac.in email addresses are permitted.' });
+    }
+
+    const allowedRoles = ['faculty', 'admin', 'student'];
+    const assignedRole = allowedRoles.includes(role) ? role : 'faculty';
+
+    try {
+        const exists = await query('SELECT id FROM users WHERE email ILIKE $1', [email]);
+        if (exists.rows.length > 0) {
+            return res.status(409).json({ error: 'An account with this email already exists.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await query(
+            `INSERT INTO users (first_name, last_name, email, password_hash, role, phone)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, email, first_name, last_name, role, created_at`,
+            [first_name, last_name, email, hashedPassword, assignedRole, phone || null]
+        );
+
+        res.status(201).json({
+            message: `${assignedRole} account created successfully.`,
+            user: result.rows[0],
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: `Failed to create account: ${err.message}` });
+    }
 };

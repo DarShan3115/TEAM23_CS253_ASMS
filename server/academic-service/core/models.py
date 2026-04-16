@@ -55,3 +55,15 @@ class Enrollment(models.Model):
         managed = False
         db_table = 'enrollments'
         unique_together = (('student', 'course'),)
+
+class CourseSchedule(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, db_column='course_id')
+    day_of_week = models.CharField(max_length=15)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    class_type = models.CharField(max_length=20, default='Lec')
+
+    class Meta:
+        managed = False
+        db_table = 'course_schedules'

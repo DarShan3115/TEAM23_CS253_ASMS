@@ -50,6 +50,16 @@ CREATE TABLE IF NOT EXISTS courses (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+-- ── Course Schedules ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS course_schedules (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    day_of_week     VARCHAR(15) NOT NULL,
+    start_time      TIME NOT NULL,
+    end_time        TIME NOT NULL,
+    class_type      VARCHAR(20) NOT NULL DEFAULT 'Lec'
+);
+
 -- ── Enrollments ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS enrollments (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -133,7 +143,7 @@ CREATE TABLE IF NOT EXISTS course_announcements (
 -- ── Discussions ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS discussions (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    course_id       UUID NOT NULL,
     author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content         TEXT NOT NULL,
     is_anonymous    BOOLEAN DEFAULT TRUE,

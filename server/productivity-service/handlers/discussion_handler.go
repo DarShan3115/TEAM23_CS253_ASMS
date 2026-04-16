@@ -67,15 +67,14 @@ func (h *DiscussionHandler) PostToDiscussion(c *gin.Context) {
 		return
 	}
 
-	userID, _ := uuid.Parse(c.GetHeader("x-user-id"))
-	
-	// Check user role from DB
-	var user struct { Role string }
-	h.DB.Table("users").Select("role").Where("id = ?", userID).Scan(&user)
+	// Identity comes from the verified JWT — not a forgeable header
+	userIDStr := c.MustGet("userID").(string)
+	userRole := c.MustGet("userRole").(string)
+	userID, _ := uuid.Parse(userIDStr)
 
 	// Enforcement: Faculty CANNOT be anonymous
 	finalAnon := input.IsAnonymous
-	if user.Role == "faculty" {
+	if userRole == "faculty" {
 		finalAnon = false
 	}
 

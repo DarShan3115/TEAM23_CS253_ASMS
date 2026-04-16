@@ -10,6 +10,7 @@ import MyCoursesPage from './pages/MyCoursesPage';
 import AdminControlPanel from './pages/AdminControlPanel';
 import FacultyDashboard from './pages/FacultyDashboard';
 import AssignmentsPage from './pages/AssignmentsPage';
+import AssignmentDetailPage from './pages/AssignmentDetailPage';
 import DiscussionPortalPage from './pages/DiscussionPortalPage';
 import FacultyGradingPage from './pages/FacultyGradingPage';
 import DashboardPage from './pages/DashboardPage';
@@ -18,9 +19,11 @@ import FacultyCourseBoard from './pages/FacultyCourseBoard';
 import TasksPage from './pages/TasksPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
+import AcademicProgressPage from './pages/AcademicProgressPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import MainLayout from './layouts/MainLayout';
+import TimetablePage from './pages/TimetablePage';
 import { useAuthStore } from './store/authStore';
 
 /**
@@ -76,8 +79,11 @@ export default function App() {
         <Route path="/dashboard" element={<ProtectedRoute><MainLayout><DashboardPage /></MainLayout></ProtectedRoute>} />
         <Route path="/courses" element={<ProtectedRoute role="student"><MainLayout><MyCoursesPage /></MainLayout></ProtectedRoute>} />
         <Route path="/courses/:courseId" element={<ProtectedRoute role="student"><MainLayout><CourseDetailBoard /></MainLayout></ProtectedRoute>} />
+        <Route path="/courses/:courseId/assignments/:assignmentId" element={<ProtectedRoute role="student"><MainLayout><AssignmentDetailPage /></MainLayout></ProtectedRoute>} />
         <Route path="/tasks" element={<ProtectedRoute role="student"><MainLayout><TasksPage /></MainLayout></ProtectedRoute>} />
         <Route path="/assignments" element={<ProtectedRoute role="student"><MainLayout><TasksPage /></MainLayout></ProtectedRoute>} />
+        <Route path="/progress" element={<ProtectedRoute role="student"><MainLayout><AcademicProgressPage /></MainLayout></ProtectedRoute>} />
+        <Route path="/timetable" element={<ProtectedRoute><MainLayout><TimetablePage /></MainLayout></ProtectedRoute>} />
         <Route path="/discussions" element={<ProtectedRoute><MainLayout><DiscussionPortalPage /></MainLayout></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><MainLayout><ProfilePage /></MainLayout></ProtectedRoute>} />
         <Route path="/faculty/grading/:assignmentId" element={<ProtectedRoute role="faculty"><MainLayout><FacultyGradingWrapper /></MainLayout></ProtectedRoute>} />

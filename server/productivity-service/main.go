@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DarShan3115/TEAM23_CS253_ASMS/server/productivity-service/handlers"
+	"github.com/DarShan3115/TEAM23_CS253_ASMS/server/productivity-service/middleware"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -17,7 +18,7 @@ func main() {
 	// Database Connection
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "host=db user=admin password=admin dbname=asms_db port=5432 sslmode=disable"
+		dbURL = "host=db user=postgres password=password dbname=asms_db port=5432 sslmode=disable"
 	}
 	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{})
 	if err != nil {
@@ -63,6 +64,7 @@ func main() {
 	submissionHandler := handlers.NewSubmissionHandler(db)
 
 	v1 := r.Group("/api/productivity/v1")
+	v1.Use(middleware.JWTAuth()) // All v1 routes require a valid JWT
 	{
 		v1.GET("/ping", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
@@ -81,10 +83,14 @@ func main() {
 		v1.GET("/discussions/:courseId", discussionHandler.GetDiscussions)
 		v1.POST("/discussions", discussionHandler.PostToDiscussion)
 
-		// Submissions / Grading APIs (used by faculty and students)
+		// Submissions / Grading APIs
 		v1.POST("/submissions", submissionHandler.SubmitTask)
 		v1.GET("/assignments/:id/submissions", submissionHandler.GetSubmissionByTask)
-		v1.PUT("/submissions/:submissionId/grade", submissionHandler.GradeSubmission)
+		// Grade route: faculty/admin only
+		v1.PUT("/submissions/:submissionId/grade",
+			middleware.RequireRole("faculty", "admin"),
+			submissionHandler.GradeSubmission,
+		)
 	}
 
 	// 5. Start server

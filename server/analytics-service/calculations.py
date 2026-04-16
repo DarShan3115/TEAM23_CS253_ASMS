@@ -22,15 +22,15 @@ def calculate_gpa(enrollments, db):
     return total_points / total_credits if total_credits > 0 else 0.0
 
 def calculate_subject_attendance(db, student_id, course_id):
-    logs = db.query(models.AttendanceLog).filter(
-        models.AttendanceLog.student_id == student_id,
-        models.AttendanceLog.course_id == course_id
+    logs = db.query(models.Attendance).filter(
+        models.Attendance.student_id == student_id,
+        models.Attendance.course_id == course_id
     ).all()
     
     if not logs:
         return 0
         
-    present_count = len([l for l in logs if l.status == 'Present'])
+    present_count = len([l for l in logs if l.status == 'present'])
     return int((present_count / len(logs)) * 100)
 
 def get_risk_level(attendance, grade):

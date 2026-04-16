@@ -23,14 +23,27 @@ export default function LoginPage() {
     e.preventDefault();
     const data = await login(email, password);
     if (!data.success) return;
+
     if (data.user.role !== selectedRole) {
-      useAuthStore.getState().logout();
+      // Clear auth state synchronously in one atomic update so the error
+      // renders on this same tick — calling async logout() caused a race
+      // where the new token triggered <Navigate to="/dashboard"> before
+      // the error state was visible.
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       useAuthStore.setState({
-        error: `This account is a "${data.user.role}" account. Please select the correct role.`,
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        loading: false,
+        error: `This account is registered as "${data.user.role}". Please go back and select the correct role.`,
       });
       return;
     }
-    navigate('/dashboard');
+
+    // Role matches — navigate to correct home
+    const roleHome = { student: '/dashboard', faculty: '/faculty-hub', admin: '/admin/console' };
+    navigate(roleHome[data.user.role] || '/dashboard');
   };
 
   const handleBack = () => {
@@ -47,8 +60,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg mb-4">
-            <Shield size={18} className="text-white" />
+          <div className="inline-flex items-center justify-center p-2 bg-white/5 border border-white/10 rounded-xl mb-4 shadow-lg">
+            <img src="/LogoASMS.png" alt="ASMS Logo" className="h-12 w-auto drop-shadow-lg" />
           </div>
           <h1 className="text-xl font-semibold text-white">ASMS</h1>
           <p className="text-zinc-500 text-sm mt-1">IIT Kanpur — Academic Management System</p>

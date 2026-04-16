@@ -1,5 +1,6 @@
 const { query } = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { randomInt } = require('crypto');
 const { otpStore } = require('../config/otpStore');
 const { sendEmail, otpEmailHtml } = require('../config/messaging');
 
@@ -45,7 +46,7 @@ exports.sendChangePasswordOtp = async (req, res) => {
         if (userResult.rows.length === 0) return res.status(404).json({ message: 'User not found.' });
 
         const email = userResult.rows[0].email;
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = randomInt(100000, 1000000).toString();
         const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
         // Key: user's email, Value: {otp, expiresAt}

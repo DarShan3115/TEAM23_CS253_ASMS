@@ -10,24 +10,48 @@ require('./config/db'); // Initialize DB connection
 
 const app = express();
 
-// Middleware
-// Dynamic CORS configuration to support local dev and Codespaces
+// Explicit CORS allowlist — never reflect arbitrary origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  ...(process.env.CODESPACE_NAME
+    ? [`https://${process.env.CODESPACE_NAME}-3000.app.github.dev`]
+    : []),
+];
 app.use(cors({
-  origin: true, // Reflects the request origin back, allowing any site to access (safe behind proxy)
+  origin: (origin, callback) => {
+    // Allow non-browser requests (curl, Postman) or known origins
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Rate Limiters
-// Rate Limiters - increased for development flexibility
+// General API rate limiter — reasonable production limit
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Allow 1000 requests to avoid "unreachable" errors during testing
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
 });
+
+// Strict limiter for auth endpoints (login, OTP) — brute-force protection
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again in 15 minutes.' },
+});
+
 app.use('/api', generalLimiter);
+app.use('/api/auth/send-otp', authLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/users/send-change-otp', authLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
