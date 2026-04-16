@@ -257,6 +257,11 @@ class CourseDetailView(APIView):
         if not course:
             return Response({"error": f"Course '{course_id}' not found"}, status=status.HTTP_404_NOT_FOUND)
             
+        # Fetch schedules
+        with connection.cursor() as cur:
+            cur.execute("SELECT id, day_of_week, start_time, end_time, class_type FROM course_schedules WHERE course_id = %s", [course.id])
+            schedules = cur.fetchall()
+
         data = {
             'id': str(course.id),
             'code': course.code,
@@ -265,8 +270,23 @@ class CourseDetailView(APIView):
             'semester': course.semester,
             'description': course.description,
             'instructor_name': f"{course.instructor.first_name} {course.instructor.last_name}" if course.instructor else "Staff",
+            'schedules': [{'id': str(s[0]), 'day': s[1], 'start_time': str(s[2]), 'end_time': str(s[3]), 'type': s[4]} for s in schedules]
         }
+        # Include enrollment key only for faculty/admin so they can share it
+        if request.user.role in ('faculty', 'admin'):
+            data['enrollment_key'] = course.enrollment_key
         return Response(data)
+
+    def delete(self, request, course_id):
+        if request.user.role not in ('faculty', 'admin'):
+            return Response({"error": "Unauthorized"}, status=403)
+        try:
+            course = Course.objects.get(id=course_id)
+            course.is_active = False # Soft delete
+            course.save()
+            return Response({"message": "Course deactivated successfully"})
+        except Course.DoesNotExist:
+            return Response({"error": "Course not found"}, status=404)
 
 
 class CourseStudentsView(APIView):
@@ -359,9 +379,9 @@ class CourseAssignmentsView(APIView):
     """GET/POST /api/courses/<course_id>/assignments/"""
     def get(self, request, course_id):
         with connection.cursor() as cur:
-            cur.execute("SELECT id, title, description, due_date, max_marks, weightage, created_at FROM assignments WHERE course_id = %s ORDER BY created_at DESC", [course_id])
+            cur.execute("SELECT id, title, description, due_date, max_marks, weightage, created_at, file_url FROM assignments WHERE course_id = %s ORDER BY created_at DESC", [course_id])
             rows = cur.fetchall()
-        return Response([{'id': str(r[0]), 'title': r[1], 'description': r[2], 'due_date': r[3], 'max_marks': r[4], 'weightage': r[5], 'created_at': r[6]} for r in rows])
+        return Response([{'id': str(r[0]), 'title': r[1], 'description': r[2], 'due_date': r[3], 'max_marks': r[4], 'weightage': r[5], 'created_at': r[6], 'file_url': r[7]} for r in rows])
 
     def post(self, request, course_id):
         if request.user.role not in ('faculty', 'admin'):
@@ -372,14 +392,24 @@ class CourseAssignmentsView(APIView):
         due_date = request.data.get('due_date')
         max_marks = request.data.get('max_marks', 100)
         weightage = request.data.get('weightage', 10)
+        file_obj = request.FILES.get('file')
+        file_url = None
+
+        if file_obj:
+            try:
+                save_path = f'assignments/{course_id}/{uuid.uuid4()}_{file_obj.name}'
+                file_url = default_storage.save(save_path, file_obj)
+            except Exception as e:
+                print(f'[WARN] Could not save assignment file: {e}')
+
         new_id = str(uuid.uuid4())
         with connection.cursor() as cur:
             cur.execute(
-                "INSERT INTO assignments (id, course_id, title, description, due_date, max_marks, weightage) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, title, max_marks, weightage",
-                [new_id, course_id, title, description, due_date, max_marks, weightage]
+                "INSERT INTO assignments (id, course_id, title, description, due_date, max_marks, weightage, file_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, title, max_marks, weightage, file_url",
+                [new_id, course_id, title, description, due_date, max_marks, weightage, file_url]
             )
             row = cur.fetchone()
-        return Response({'id': str(row[0]), 'title': row[1], 'max_marks': row[2], 'weightage': row[3]}, status=status.HTTP_201_CREATED)
+        return Response({'id': str(row[0]), 'title': row[1], 'max_marks': row[2], 'weightage': row[3], 'file_url': row[4]}, status=status.HTTP_201_CREATED)
 
 class MyTimetableView(APIView):
     """GET /api/timetable/"""

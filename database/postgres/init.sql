@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS discussions (
     author_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content         TEXT NOT NULL,
     is_anonymous    BOOLEAN DEFAULT TRUE,
+    parent_id       UUID REFERENCES discussions(id) ON DELETE CASCADE,
     votes           INTEGER DEFAULT 0,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -2,29 +2,200 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Megaphone, BookOpen, UserCheck, BarChart2, ClipboardList,
-  MessageSquare, Upload, Plus, Trash2, Save, CheckCircle, AlertCircle, FileText, Send
+  MessageSquare, Upload, Plus, Trash2, Save, CheckCircle, AlertCircle, FileText, Send, Copy, Check, KeyRound, Clock, Calendar, Info, X
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
-const ACADEMIC = '/api/academic';
-const PRODUCTIVITY = '/api/v1';
+const ACADEMIC = import.meta.env.VITE_ACADEMIC_API_URL || '/api/academic';
+const PRODUCTIVITY = import.meta.env.VITE_PRODUCTIVITY_API_URL || '/api/productivity/v1';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const inputClass = 'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all';
-const labelClass = 'text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block';
+const inputClass = 'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all text-sm';
+const labelClass = 'text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 block';
 
 const Feedback = ({ msg }) => {
   if (!msg?.text) return null;
   return (
-    <div className={`flex items-center gap-2 p-3 rounded-xl text-sm font-medium ${msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-      {msg.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+    <div className={`flex items-center gap-2 p-3 rounded-xl text-xs font-bold ${msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+      {msg.type === 'success' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
       {msg.text}
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Tab: Course Info & Timings
+// ---------------------------------------------------------------------------
+function InfoTab({ course }) {
+  const [schedules, setSchedules] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [newSchedule, setNewSchedule] = useState({ day: 'Monday', start_time: '09:00', end_time: '10:00', type: 'Lec' });
+  const [scheduleMsg, setScheduleMsg] = useState({});
+  const navigate = useNavigate();
+
+  const fetchSchedules = async () => {
+    try {
+      const res = await api.get(`${ACADEMIC}/courses/${course.id}/schedule/`);
+      setSchedules(Array.isArray(res.data) ? res.data : []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (course?.id) fetchSchedules();
+  }, [course?.id]);
+
+  const handleAddSchedule = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`${ACADEMIC}/courses/${course.id}/schedule/`, {
+        day: newSchedule.day,
+        start_time: newSchedule.start_time,
+        end_time: newSchedule.end_time,
+        class_type: newSchedule.type
+      });
+      setScheduleMsg({ type: 'success', text: 'Schedule added' });
+      setNewSchedule({ day: 'Monday', start_time: '09:00', end_time: '10:00', type: 'Lec' });
+      fetchSchedules();
+    } catch {
+      setScheduleMsg({ type: 'error', text: 'Failed to add schedule' });
+    }
+  };
+
+  const handleDeleteSchedule = async (id) => {
+    try {
+      await api.delete(`${ACADEMIC}/courses/${course.id}/schedule/`, { params: { schedule_id: id } });
+      fetchSchedules();
+    } catch {}
+  };
+
+  const formatTime = (t) => t?.substring(0, 5) || '—';
+
+  const handleDeleteCourse = async () => {
+    if (deleteInput !== course.code) return;
+    try {
+      await api.delete(`${ACADEMIC}/courses/${course.id}/`);
+      navigate('/faculty-hub');
+    } catch {
+      setScheduleMsg({ type: 'error', text: 'Deactivation failed' });
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Timings Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2"><Clock size={14} className="text-blue-400"/> Class & Lab Timings</h3>
+          </div>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-900/50 text-zinc-500 font-black uppercase tracking-widest border-b border-zinc-800">
+                <tr>
+                  <th className="px-4 py-3">Day</th>
+                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {schedules.map(s => (
+                  <tr key={s.id} className="text-zinc-300 hover:bg-zinc-800/20 transition-colors">
+                    <td className="px-4 py-3 font-bold">{s.day}</td>
+                    <td className="px-4 py-3">{formatTime(s.start_time)} - {formatTime(s.end_time)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${s.type === 'Lab' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                        {s.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => handleDeleteSchedule(s.id)} className="text-zinc-600 hover:text-red-400 transition-colors"><Trash2 size={14}/></button>
+                    </td>
+                  </tr>
+                ))}
+                {!schedules.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-600 italic">No schedules defined</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <form onSubmit={handleAddSchedule} className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className={labelClass}>Day</label>
+              <select className={inputClass} value={newSchedule.day} onChange={e => setNewSchedule({...newSchedule, day: e.target.value})}>
+                {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Start</label>
+              <input type="time" className={inputClass} value={newSchedule.start_time} onChange={e => setNewSchedule({...newSchedule, start_time: e.target.value})} />
+            </div>
+            <div>
+              <label className={labelClass}>End</label>
+              <input type="time" className={inputClass} value={newSchedule.end_time} onChange={e => setNewSchedule({...newSchedule, end_time: e.target.value})} />
+            </div>
+            <div>
+              <label className={labelClass}>Type</label>
+              <select className={inputClass} value={newSchedule.type} onChange={e => setNewSchedule({...newSchedule, type: e.target.value})}>
+                <option value="Lec">Lecture</option>
+                <option value="Lab">Lab</option>
+                <option value="Tut">Tutorial</option>
+              </select>
+            </div>
+            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white h-10 rounded-lg flex items-center justify-center gap-2 font-bold text-xs"><Plus size={14}/> Add</button>
+          </form>
+          <Feedback msg={scheduleMsg} />
+        </div>
+
+        {/* Info & Settings Section */}
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2"><Info size={14} className="text-zinc-400"/> Course Description</h3>
+            <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl text-zinc-400 text-sm leading-relaxed italic">
+              {course?.description || 'No description provided.'}
+            </div>
+          </div>
+
+          <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl space-y-4">
+            <h3 className="text-red-400 font-black text-xs uppercase tracking-widest flex items-center gap-2"><Trash2 size={14}/> Danger Zone</h3>
+            <p className="text-xs text-zinc-500">Deactivating the course will remove it from student listings and stop all further activities. This action is reversible by admins.</p>
+            
+            {!showDeleteConfirm ? (
+              <button 
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-xs font-black transition-all"
+              >
+                DEACTIVATE COURSE
+              </button>
+            ) : (
+              <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                <p className="text-[10px] text-red-400 font-bold">Type <span className="underline">{course.code}</span> to confirm:</p>
+                <div className="flex gap-2">
+                  <input 
+                    className={inputClass + ' border-red-500/40 focus:ring-red-500/20'} 
+                    placeholder={course.code}
+                    value={deleteInput}
+                    onChange={e => setDeleteInput(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleDeleteCourse}
+                    disabled={deleteInput !== course.code}
+                    className="px-6 bg-red-600 hover:bg-red-500 disabled:opacity-30 text-white font-black text-xs rounded-xl"
+                  >
+                    CONFIRM
+                  </button>
+                  <button onClick={() => {setShowDeleteConfirm(false); setDeleteInput('')}} className="p-2.5 bg-zinc-800 rounded-xl text-zinc-400"><X size={16}/></button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Tab: Announcements
@@ -109,13 +280,6 @@ function ResourcesTab({ courseId }) {
     } catch (err) {
       setMsg({ type: 'error', text: 'Failed to add resource.' });
     }
-  };
-
-  const handleDelete = async (id, type) => {
-    try {
-      await api.delete(`${ACADEMIC}/resources/${id}/`);
-      setResources({ ...resources, [type]: resources[type].filter(r => r.id !== id) });
-    } catch {}
   };
 
   const ResourceList = ({ items, type }) => (
@@ -269,6 +433,7 @@ function MarksTab({ courseId }) {
   const [grading, setGrading] = useState({});
   const [msg, setMsg] = useState({});
   const [newAssignment, setNewAssignment] = useState({ title: '', description: '', due_date: '', max_marks: 100, weightage: 10 });
+  const [uploadFile, setUploadFile] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
@@ -297,10 +462,21 @@ function MarksTab({ courseId }) {
 
   const handleCreateAssignment = async (e) => {
     e.preventDefault();
+    const formData = new FormData();
+    formData.append('title', newAssignment.title);
+    formData.append('description', newAssignment.description);
+    formData.append('due_date', newAssignment.due_date);
+    formData.append('max_marks', newAssignment.max_marks);
+    formData.append('weightage', newAssignment.weightage);
+    if (uploadFile) formData.append('file', uploadFile);
+
     try {
-      const res = await api.post(`${ACADEMIC}/courses/${courseId}/assignments/`, newAssignment);
+      const res = await api.post(`${ACADEMIC}/courses/${courseId}/assignments/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       setAssignments([...assignments, res.data]);
       setNewAssignment({ title: '', description: '', due_date: '', max_marks: 100, weightage: 10 });
+      setUploadFile(null);
       setShowCreateForm(false);
       setMsg({ type: 'success', text: 'Assessment created!' });
     } catch {
@@ -339,7 +515,15 @@ function MarksTab({ courseId }) {
             </div>
           </div>
           <div>
-            <label className={labelClass}>Description</label>
+            <label className={labelClass}>Instruction File (PDF/Docs)</label>
+            <input 
+              type="file" 
+              onChange={e => setUploadFile(e.target.files[0])}
+              className="w-full text-zinc-500 text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-300 hover:file:bg-zinc-700 cursor-pointer"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Description / Instructions</label>
             <textarea className={inputClass} rows={2} value={newAssignment.description} onChange={e => setNewAssignment({ ...newAssignment, description: e.target.value })} placeholder="Instructions for students…" />
           </div>
           <div className="flex gap-3">
@@ -356,7 +540,10 @@ function MarksTab({ courseId }) {
           <button key={a.id} onClick={() => loadSubmissions(a.id)}
             className={`text-left p-4 rounded-xl border transition-all ${selectedAssignment === a.id ? 'bg-blue-600/15 border-blue-500/40 text-blue-400' : 'bg-zinc-950 border-zinc-800 text-white hover:border-zinc-600'}`}>
             <p className="font-bold text-sm">{a.title}</p>
-            <p className="text-xs mt-1 opacity-60">Max: {a.max_marks} marks · Weight: {a.weightage}%</p>
+            <div className="flex gap-2 items-center mt-1">
+               <p className="text-[10px] opacity-60">Max: {a.max_marks} marks · Weight: {a.weightage}%</p>
+               {a.file_url && <FileText size={12} className="text-zinc-500" />}
+            </div>
           </button>
         ))}
       </div>
@@ -410,15 +597,19 @@ function DiscussionsTab({ courseId }) {
   const [content, setContent] = useState('');
 
   useEffect(() => {
-    api.get(`${PRODUCTIVITY}/discussions/${courseId}`).then(r => setPosts(r.data || [])).catch(() => {});
+    api.get(`${PRODUCTIVITY}/discussions/${courseId}`)
+      .then(r => {
+        const data = r.data;
+        setPosts(Array.isArray(data) ? data : (data?.results || data?.posts || data?.data || []));
+      })
+      .catch(() => setPosts([]));
   }, [courseId]);
 
   const handlePost = async () => {
     if (!content.trim()) return;
     try {
       const res = await api.post(`${PRODUCTIVITY}/discussions`, { course_id: courseId, content, is_anonymous: false });
-      // Faculty are never anonymous
-      setPosts([{ ...res.data, author_name: `Professor ${user?.first_name} ${user?.last_name}` }, ...posts]);
+      setPosts(prev => [{ ...res.data, author_name: `Professor ${user?.first_name} ${user?.last_name}` }, ...(Array.isArray(prev) ? prev : [])]);
       setContent('');
     } catch {}
   };
@@ -451,12 +642,25 @@ export default function FacultyCourseBoard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('announcements');
   const [course, setCourse] = useState(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  const fetchCourse = () => {
+    api.get(`${ACADEMIC}/courses/${courseId}/`).then(r => setCourse(r.data)).catch(() => setCourse({ code: '------', title: 'Course Workspace', credits: 0, instructor_name: 'You' }));
+  };
 
   useEffect(() => {
-    api.get(`${ACADEMIC}/courses/${courseId}/`).then(r => setCourse(r.data)).catch(() => setCourse({ code: '------', title: 'Course Workspace', credits: 0, instructor_name: 'You' }));
+    fetchCourse();
   }, [courseId]);
 
+  const copyKey = () => {
+    if (!course?.enrollment_key) return;
+    navigator.clipboard.writeText(course.enrollment_key);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 2000);
+  };
+
   const TABS = [
+    { id: 'info', icon: Info, label: 'Course Info' },
     { id: 'announcements', icon: Megaphone, label: 'Announcements' },
     { id: 'resources', icon: BookOpen, label: 'Resources' },
     { id: 'attendance', icon: UserCheck, label: 'Attendance' },
@@ -467,14 +671,26 @@ export default function FacultyCourseBoard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-zinc-800 pb-6">
-        <button onClick={() => navigate('/faculty-hub')} className="p-2 border border-zinc-700 bg-zinc-800 rounded-lg hover:bg-zinc-700 text-zinc-300"><ArrowLeft size={20} /></button>
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="text-blue-400 font-black text-xl tracking-widest bg-blue-900/30 px-3 py-1 rounded-md border border-blue-800/50">{course?.code || '——'}</span>
-            <h1 className="text-3xl font-black text-white">{course?.title || 'Loading…'}</h1>
+      <div className="border-b border-zinc-800 pb-6 space-y-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/faculty-hub')} className="p-2 border border-zinc-700 bg-zinc-800 rounded-lg hover:bg-zinc-700 text-zinc-300 transition-colors"><ArrowLeft size={20} /></button>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <span className="text-blue-400 font-black text-xl tracking-widest bg-blue-900/30 px-3 py-1 rounded-md border border-blue-800/50">{course?.code || '——'}</span>
+              <h1 className="text-3xl font-black text-white">{course?.title || 'Loading…'}</h1>
+            </div>
+            <p className="text-zinc-500 mt-1 font-medium">{course?.instructor_name} · {course?.credits} Credits</p>
           </div>
-          <p className="text-zinc-500 mt-1 font-medium">{course?.instructor_name} · {course?.credits} Credits</p>
+          
+          {course?.enrollment_key && (
+            <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shrink-0">
+               <KeyRound size={14} className="text-amber-400 shrink-0" />
+               <code className="text-amber-400 font-mono font-bold tracking-widest text-sm">{course.enrollment_key}</code>
+               <button onClick={copyKey} className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${keyCopied ? 'bg-green-600/20 text-green-400' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
+                 {keyCopied ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+               </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -492,6 +708,7 @@ export default function FacultyCourseBoard() {
 
         {/* Content */}
         <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 min-h-[520px]">
+          {activeTab === 'info' && <InfoTab course={course} onRefresh={fetchCourse} />}
           {activeTab === 'announcements' && <AnnouncementsTab courseId={courseId} />}
           {activeTab === 'resources' && <ResourcesTab courseId={courseId} />}
           {activeTab === 'attendance' && <AttendanceTab courseId={courseId} />}

@@ -1,3 +1,6 @@
+# BuildKit must be enabled for --mount=type=cache in Dockerfiles to work.
+# Run with: COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose up --build
+# Or set these permanently in your shell / .env
 services:
   db:
     image: postgres:15-alpine

@@ -35,6 +35,7 @@ export default function CourseDetailBoard() {
   const [newPost, setNewPost] = useState('');
   const [isAnon, setIsAnon] = useState(true);
   const [postLoading, setPostLoading] = useState(false);
+  const [replyTo, setReplyTo] = useState(null); // Added for threading
 
   // Assignment detail / submission state
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -71,7 +72,10 @@ export default function CourseDetailBoard() {
       if (annRes.status === 'fulfilled')   setAnnouncements(annRes.value.data || []);
       if (resRes.status === 'fulfilled')   setResources(resRes.value.data || []);
       if (attRes.status === 'fulfilled')   setAttendance(attRes.value.data || []);
-      if (discRes.status === 'fulfilled')  setPosts(discRes.value.data || []);
+      if (discRes.status === 'fulfilled') {
+        const dData = discRes.value.data;
+        setPosts(Array.isArray(dData) ? dData : []);
+      }
     } catch (err) {
       console.warn('Could not fetch some course components', err);
     }
@@ -99,18 +103,21 @@ export default function CourseDetailBoard() {
     }
   };
 
-  const handlePost = async () => {
-    if (!newPost.trim()) return;
+  const handlePost = async (parentId = null) => {
+    const text = parentId ? (replyTo?.content || '') : newPost;
+    if (!text.trim()) return;
     setPostLoading(true);
     try {
       await api.post(`${PRODUCTIVITY_API}/discussions`, {
         course_id: courseId,
-        content: newPost,
+        content: text,
         is_anonymous: isFaculty ? false : isAnon,
+        parent_id: parentId,
       });
       setNewPost('');
+      setReplyTo(null);
       const res = await api.get(`${PRODUCTIVITY_API}/discussions/${courseId}`);
-      setPosts(res.data || []);
+      setPosts(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Post failed', err);
     } finally {
@@ -319,15 +326,21 @@ export default function CourseDetailBoard() {
                       <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
                         {selectedAssignment.description || 'No instructions provided.'}
                       </p>
-                      {selectedAssignment.attachments?.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                          <p className="text-[10px] font-black text-zinc-500 uppercase">Attachments</p>
-                          {selectedAssignment.attachments.map((att, i) => (
-                            <a key={i} href={att.file_url} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-2 p-2 bg-zinc-950 border border-zinc-800 rounded-lg hover:border-blue-500/40 transition-colors text-blue-400 text-xs font-medium">
-                              <ExternalLink size={12} /> {att.name || 'Download Attachment'}
-                            </a>
-                          ))}
+                      {selectedAssignment.file_url && (
+                        <div className="mt-6 pt-6 border-t border-zinc-800 space-y-3">
+                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                             <Upload size={10} className="text-blue-500" /> Instructor Attachments
+                          </p>
+                          <a 
+                            href={selectedAssignment.file_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-3 p-3 bg-blue-600/10 border border-blue-500/20 rounded-xl hover:bg-blue-600/20 transition-all text-blue-400 font-bold text-xs"
+                          >
+                            <FileText size={16} />
+                            Download Instructions
+                            <ExternalLink size={12} className="opacity-50" />
+                          </a>
                         </div>
                       )}
                     </div>
@@ -499,59 +512,107 @@ export default function CourseDetailBoard() {
             </div>
           )}
 
-          {/* ── Discussions (Course-Scoped) ── */}
+          {/* ── Discussions (Threaded Q&A) ── */}
           {activeTab === 'discussions' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-white">Course Discussion</h3>
+            <div className="space-y-6 animate-in fade-in duration-500">
+              <h3 className="text-lg font-semibold text-white">Course Q&A</h3>
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <textarea
                   value={newPost}
                   onChange={e => setNewPost(e.target.value)}
-                  placeholder="Ask a question or start a discussion..."
+                  placeholder="Have a doubt? Ask it here..."
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-white outline-none focus:border-blue-500/60 min-h-[90px] text-sm resize-none"
                 />
                 <div className="flex items-center justify-between">
-                  {isFaculty ? (
-                    <div className="flex items-center gap-2 text-blue-400 text-xs font-bold bg-blue-400/10 px-3 py-1.5 rounded-lg border border-blue-400/20">
-                      <BadgeCheck size={13} /> Official Faculty Response
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setIsAnon(!isAnon)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isAnon ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
-                    >
-                      {isAnon ? <Lock size={13} /> : <Users size={13} />}
-                      {isAnon ? 'Anonymous Mode' : 'Public Profile'}
-                    </button>
-                  )}
-                  <button onClick={handlePost} disabled={postLoading || !newPost.trim()} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors">
-                    {postLoading ? 'Posting...' : <><Send size={14} /> Post</>}
+                  <div className="flex gap-4">
+                    {!isFaculty && (
+                      <button
+                        onClick={() => setIsAnon(!isAnon)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isAnon ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}
+                      >
+                        {isAnon ? <Lock size={13} /> : <Users size={13} />}
+                        {isAnon ? 'Anonymity ON' : 'Anonymity OFF'}
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={() => handlePost(null)} disabled={postLoading || !newPost.trim()} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors">
+                    {postLoading ? 'Posting...' : <><Send size={14} /> Post Question</>}
                   </button>
                 </div>
               </div>
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {posts.length > 0 ? posts.map((post, idx) => (
-                  <div key={idx} className={`p-4 rounded-xl border ${post.role === 'faculty' ? 'bg-blue-600/5 border-blue-500/20' : 'bg-zinc-900/40 border-zinc-800'}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${post.role === 'faculty' ? 'bg-blue-600 text-white' : 'bg-zinc-700 text-zinc-300'}`}>
-                          {post.role === 'faculty' ? 'F' : '?'}
+
+              <div className="space-y-6">
+                {(() => {
+                  const questions = Array.isArray(posts) ? posts.filter(p => !p.parent_id) : [];
+                  const getReplies = (pid) => Array.isArray(posts) ? posts.filter(p => p.parent_id === pid).sort((a,b) => new Date(a.created_at) - new Date(b.created_at)) : [];
+
+                  if (questions.length === 0) return <p className="text-sm text-zinc-600 text-center py-10 italic">No discussions yet. Be the first to start one!</p>;
+
+                  return questions.map(q => (
+                    <div key={q.id} className="space-y-4">
+                      {/* Top Level Post */}
+                      <div className={`p-5 rounded-2xl border ${q.role === 'faculty' ? 'bg-blue-600/5 border-blue-500/20' : 'bg-zinc-900/40 border-zinc-800'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${q.role === 'faculty' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
+                              {q.role === 'faculty' ? 'FAC' : 'STD'}
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-white flex items-center gap-1.5">
+                                {q.author_name || 'Anonymous Student'}
+                                {q.role === 'faculty' && <BadgeCheck size={14} className="text-blue-400" />}
+                              </p>
+                              <p className="text-[10px] text-zinc-600">{new Date(q.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          {q.role === 'faculty' && <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded-full border border-blue-400/20">Certified Response</span>}
                         </div>
-                        <div>
-                          <p className="text-xs font-black text-white flex items-center gap-1.5">
-                            {post.author_name || post.AuthorName || 'Student'}
-                            {post.role === 'faculty' && <BadgeCheck size={12} className="text-blue-400" />}
-                          </p>
-                          <p className="text-[10px] text-zinc-600">{new Date(post.created_at || post.CreatedAt || Date.now()).toLocaleDateString()}</p>
-                        </div>
+                        <p className="text-zinc-200 text-sm leading-relaxed mb-4">{q.content}</p>
+                        
+                        <button 
+                          onClick={() => setReplyTo(replyTo?.id === q.id ? null : { id: q.id, content: '' })}
+                          className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors ${replyTo?.id === q.id ? 'text-red-400' : 'text-zinc-500 hover:text-indigo-400 font-black'}`}
+                        >
+                          {replyTo?.id === q.id ? 'Cancel Reply' : 'Reply'}
+                        </button>
                       </div>
-                      {post.role === 'faculty' && <span className="text-[10px] font-black text-blue-400 uppercase bg-blue-400/10 px-2 py-0.5 rounded">Faculty</span>}
+
+                      {/* Replies List */}
+                      <div className="ml-10 space-y-3 border-l-2 border-zinc-800/30 pl-6">
+                        {getReplies(q.id).map(r => (
+                          <div key={r.id} className={`p-4 rounded-xl border ${r.role === 'faculty' ? 'bg-blue-900/10 border-blue-800/20 shadow-lg shadow-blue-500/5' : 'bg-zinc-950 border-zinc-800'}`}>
+                             <div className="flex items-center gap-2 mb-2">
+                               <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${r.role === 'faculty' ? 'bg-blue-600/10 text-blue-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                 {r.author_name || 'Anonymous Student'}
+                               </span>
+                             </div>
+                             <p className="text-sm text-zinc-300">{r.content}</p>
+                          </div>
+                        ))}
+
+                        {/* Reply UI */}
+                        {replyTo?.id === q.id && (
+                          <div className="flex gap-2 animate-in slide-in-from-left-2 duration-300">
+                            <input 
+                              autoFocus
+                              className="flex-1 bg-zinc-900 border border-indigo-500/30 rounded-xl px-4 py-2 text-white text-xs outline-none focus:border-indigo-500"
+                              placeholder="Write your answer..."
+                              value={replyTo.content}
+                              onChange={e => setReplyTo({ ...replyTo, content: e.target.value })}
+                              onKeyDown={e => e.key === 'Enter' && handlePost(q.id)}
+                            />
+                            <button 
+                              onClick={() => handlePost(q.id)}
+                              className="bg-indigo-600 p-2.5 rounded-xl text-white hover:bg-indigo-500 transition-all flex items-center justify-center"
+                            >
+                              <Send size={16}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-zinc-300 text-sm leading-relaxed">{post.content}</p>
-                  </div>
-                )) : (
-                  <p className="text-sm text-zinc-600 text-center py-10">No discussions yet. Be the first to ask a question!</p>
-                )}
+                  ));
+                })()}
               </div>
             </div>
           )}
