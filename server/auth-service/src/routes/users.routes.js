@@ -4,7 +4,6 @@ const router = express.Router();
 const usersController = require('../controllers/users.controller');
 const auth = require('../middleware/auth');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 
 // Ensure upload directory exists
@@ -19,7 +18,8 @@ const storage = multer.diskStorage({
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-        cb(null, req.user.id + '-' + Date.now() + path.extname(file.originalname));
+        // Always use .jpg — never trust the client-provided extension
+        cb(null, req.user.id + '-' + Date.now() + '.jpg');
     }
 });
 

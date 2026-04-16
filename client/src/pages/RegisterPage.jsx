@@ -34,6 +34,12 @@ export default function RegisterPage() {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setLocalError('');
+    
+    const nameRx = /^[A-Za-z\s\-']+$/;
+    if (!nameRx.test(form.first_name) || !nameRx.test(form.last_name)) {
+      return setLocalError('Names can only contain letters, spaces, hyphens, and apostrophes (no emojis/numbers).');
+    }
+
     if (!form.email.endsWith('@iitk.ac.in')) {
       return setLocalError('Email must be a valid @iitk.ac.in address.');
     }
@@ -64,6 +70,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-6">
+          <img src="/LogoASMS.png" alt="ASMS Logo" className="h-12 w-auto mx-auto mb-4 drop-shadow-lg" />
           <h1 className="text-xl font-semibold text-white">Create Account</h1>
           <p className="text-zinc-500 text-sm mt-1">Join ASMS — IIT Kanpur</p>
         </div>
@@ -190,5 +197,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-  )};
-  )};

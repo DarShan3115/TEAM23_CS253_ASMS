@@ -34,3 +34,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
+
+/* Quick dynamic light mode hack through CSS inversion */
+html.light-theme {
+  filter: invert(1) hue-rotate(180deg);
+}
+html.light-theme img,
+html.light-theme video {
+  filter: invert(1) hue-rotate(180deg);
+}

@@ -4,7 +4,8 @@ from .views import (
     CourseDetailView, CourseStudentsView,
     CourseAnnouncementsView, CourseResourcesView, ResourceDeleteView,
     CourseAssignmentsView, MarkAttendanceView, UpdateFinalGradeView,
-    CourseEnrollByCodeView
+    CourseEnrollByCodeView, MyTimetableView, CourseScheduleManageView, CourseInviteView,
+    AssignmentSubmitView
 )
 
 urlpatterns = [
@@ -21,7 +22,11 @@ urlpatterns = [
     path('courses/<str:course_id>/announcements/', CourseAnnouncementsView.as_view(), name='course-announcements'),
     path('courses/<str:course_id>/resources/', CourseResourcesView.as_view(), name='course-resources'),
     path('courses/<str:course_id>/assignments/', CourseAssignmentsView.as_view(), name='course-assignments'),
+    path('courses/<str:course_id>/invite/', CourseInviteView.as_view(), name='course-invite'),
     path('resources/<str:resource_id>/', ResourceDeleteView.as_view(), name='resource-delete'),
     path('attendance/mark/', MarkAttendanceView.as_view(), name='mark-attendance'),
     path('enrollments/grade/', UpdateFinalGradeView.as_view(), name='update-grade'),
+    path('timetable/', MyTimetableView.as_view(), name='my-timetable'),
+    path('courses/<str:course_id>/schedule/', CourseScheduleManageView.as_view(), name='course-schedule-manage'),
+    path('courses/<str:course_id>/assignments/<str:assignment_id>/submit/', AssignmentSubmitView.as_view(), name='assignment-submit'),
 ]

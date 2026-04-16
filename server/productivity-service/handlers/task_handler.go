@@ -17,18 +17,13 @@ func NewTaskHandler(db *gorm.DB) *TaskHandler {
 	return &TaskHandler{DB: db}
 }
 
-// GetUserTasks returns all assignments for a specific student
+// GetUserTasks returns all tasks for the authenticated user
 func (h *TaskHandler) GetUserTasks(c *gin.Context) {
-	// For now, we'll take userID from a header or query param until JWT is fully synced
-	userIDStr := c.GetHeader("x-user-id")
-	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID required"})
-		return
-	}
+	userIDStr := c.MustGet("userID").(string)
 
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid User ID in token"})
 		return
 	}
 
@@ -64,7 +59,7 @@ func (h *TaskHandler) GetCourseTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
-// CreateTask adds a new assignment
+// CreateTask adds a new task, assigning it to the authenticated user
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task models.Task
 	if err := c.ShouldBindJSON(&task); err != nil {
@@ -72,11 +67,9 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	userIDStr := c.GetHeader("x-user-id")
-	if userIDStr != "" {
-		if uid, err := uuid.Parse(userIDStr); err == nil {
-			task.UserID = uid
-		}
+	userIDStr := c.MustGet("userID").(string)
+	if uid, err := uuid.Parse(userIDStr); err == nil {
+		task.UserID = uid
 	}
 
 	if err := h.DB.Create(&task).Error; err != nil {

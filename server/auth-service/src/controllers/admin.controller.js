@@ -10,7 +10,12 @@ exports.listUsers = async (req, res) => {
         let sql = 'SELECT id, email, first_name, last_name, role, phone, avatar_url, created_at, locked_until FROM users WHERE 1=1';
         const params = [];
         if (role) { sql += ` AND role = $${params.length + 1}`; params.push(role); }
-        if (search) { sql += ` AND (first_name ILIKE $${params.length + 1} OR last_name ILIKE $${params.length + 1} OR email ILIKE $${params.length + 1})`; params.push(`%${search}%`); }
+        if (search) {
+            const idx = params.length + 1;
+            sql += ` AND (first_name ILIKE $${idx} OR last_name ILIKE $${idx + 1} OR email ILIKE $${idx + 2})`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
         sql += ' ORDER BY created_at DESC';
         const result = await query(sql, params);
         res.json(result.rows);

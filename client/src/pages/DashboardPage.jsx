@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -101,7 +102,7 @@ export default function DashboardPage() {
             <h2 className="text-xl font-semibold text-white flex items-center gap-3">
               <Calendar size={20} className="text-blue-500" /> Today's Schedule
             </h2>
-            <button className="text-xs font-bold text-blue-500 hover:text-blue-400 Transition">Full Calendar</button>
+            <Link to="/tasks" className="text-xs font-bold text-blue-500 hover:text-blue-400 transition">Full Calendar</Link>
           </div>
           
           <div className="space-y-3">
@@ -150,9 +151,9 @@ export default function DashboardPage() {
                <p className="text-sm text-zinc-600 text-center py-4">All caught up!</p>
             )}
 
-            <button className="w-full py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 text-xs font-bold hover:text-white hover:border-zinc-700 transition-all flex items-center justify-center gap-2">
+            <Link to="/tasks" className="w-full py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 text-xs font-bold hover:text-white hover:border-zinc-700 transition-all flex items-center justify-center gap-2">
               View All Activity <ArrowRight size={14} />
-            </button>
+            </Link>
           </div>
         </div>
       </div>

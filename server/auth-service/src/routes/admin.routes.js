@@ -2,17 +2,10 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const auth = require('../middleware/auth');
+const adminGuard = require('../middleware/adminGuard');
 
-// Admin role guard
-const adminOnly = (req, res, next) => {
-    if (req.user?.role !== 'admin') {
-        return res.status(403).json({ message: 'Admin access required.' });
-    }
-    next();
-};
-
-// All routes require JWT + admin role
-router.use(auth, adminOnly);
+// All routes require JWT + admin guard constraints
+router.use(auth, adminGuard);
 
 // Platform Stats
 router.get('/stats', adminController.getPlatformStats);

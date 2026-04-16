@@ -26,9 +26,9 @@ class Enrollment(Base):
     grade = Column(String, nullable=True)
     status = Column(String)
 
-class AttendanceLog(Base):
-    __tablename__ = "attendance_logs"
+class Attendance(Base):
+    __tablename__ = "attendance"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id"))
-    status = Column(String) # 'Present', 'Absent'
+    status = Column(String) # 'present', 'absent', 'late' (lowercase per DB CHECK constraint)

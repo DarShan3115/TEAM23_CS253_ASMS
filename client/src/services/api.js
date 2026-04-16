@@ -13,6 +13,9 @@ api.interceptors.request.use((config) => {
   const user = JSON.parse(localStorage.getItem('user'));
 
   if (token) {
+    // Standard Bearer header — required by academic-service and productivity-service JWT middleware
+    config.headers['Authorization'] = `Bearer ${token}`;
+    // Legacy header kept for auth-service compatibility
     config.headers['x-auth-token'] = token;
   }
   
@@ -69,6 +72,7 @@ api.interceptors.response.use(
         const { data } = await axios.post('/api/auth/refresh-token', {}, { withCredentials: true });
         const newToken = data.token;
         localStorage.setItem('token', newToken);
+        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
         originalRequest.headers['x-auth-token'] = newToken;
         processQueue(null, newToken);
         isRefreshing = false;

@@ -2,16 +2,17 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=asms_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./database/postgres/seed_test_data.sql:/docker-entrypoint-initdb.d/02_seed_test_data.sql
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d asms_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,19 +21,19 @@ services:
     build: ./server/auth-service
     environment:
       - PORT=5001
-      - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
-      - JWT_SECRET=generate_a_long_random_string_here
-      - JWT_REFRESH_SECRET=generate_another_long_random_refresh_string_here
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - NODE_ENV=development
       # ── Email (Nodemailer / Gmail SMTP) ──────────────────────────────────
-      # Fill these in to send real emails; leave blank to use console mock
-      - SMTP_USER=
-      - SMTP_PASS=
+      # Fill these in .env to send real emails; leave blank to use console mock
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
       # ── SMS (Twilio) ──────────────────────────────────────────────────────
-      # Fill these in to send real SMS OTPs; leave blank to use console mock
-      - TWILIO_ACCOUNT_SID=
-      - TWILIO_AUTH_TOKEN=
-      - TWILIO_PHONE=
+      # Fill these in .env to send real SMS OTPs; leave blank to use console mock
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE=${TWILIO_PHONE}
     ports:
       - "5001:5001"
     depends_on:
@@ -45,12 +46,13 @@ services:
   academic-service:
     build: ./server/academic-service
     environment:
-      - DB_NAME=asms_db
-      - DB_USER=postgres
-      - DB_PASSWORD=password
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_HOST=db
       - DB_PORT=5432
-      - SECRET_KEY=django-insecure-key
+      - SECRET_KEY=${DJANGO_SECRET_KEY}
+      - JWT_SECRET=${JWT_SECRET}
     ports:
       - "8000:8000"
     depends_on:
@@ -65,7 +67,8 @@ services:
     environment:
       - PORT=8080
       - GIN_MODE=debug
-      - DATABASE_URL=postgres://postgres:password@db:5432/asms_db?sslmode=disable
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
     ports:
       - "8080:8080"
     depends_on:
@@ -76,9 +79,10 @@ services:
     build: ./server/analytics-service
     environment:
       - PORT=8001
-      - DATABASE_URL=postgresql://postgres:password@db:5432/asms_db
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - ACADEMIC_SERVICE_URL=http://academic-service:8000
       - AUTH_SERVICE_URL=http://auth-service:5001
+      - JWT_SECRET=${JWT_SECRET}
       - PYTHONPATH=/app # FIX: Resolves Python Absolute Imports
     ports:
       - "8001:8001"

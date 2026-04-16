@@ -28,13 +28,8 @@ func (h *SubmissionHandler) SubmitTask(c *gin.Context) {
 		return
 	}
 
-	// Extract Student ID from header (sent by our React frontend)
-	studentIDStr := c.GetHeader("x-user-id")
-	if studentIDStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User identification missing"})
-		return
-	}
-
+	// Extract Student ID from the verified JWT context
+	studentIDStr := c.MustGet("userID").(string)
 	studentID, _ := uuid.Parse(studentIDStr)
 	assignmentID, _ := uuid.Parse(input.AssignmentID)
 
@@ -45,13 +40,11 @@ func (h *SubmissionHandler) SubmitTask(c *gin.Context) {
 		Content:      input.Content,
 	}
 
-	// Save to database
 	if err := h.DB.Create(&submission).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save submission"})
 		return
 	}
 
-	// Logic to update the assignment status could go here
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Submission received successfully",
 		"id":      submission.ID,
@@ -61,7 +54,7 @@ func (h *SubmissionHandler) SubmitTask(c *gin.Context) {
 // GetSubmissionByTask allows a student to see what they submitted
 func (h *SubmissionHandler) GetSubmissionByTask(c *gin.Context) {
 	assignmentID := c.Param("id")
-	studentID := c.GetHeader("x-user-id")
+	studentID := c.MustGet("userID").(string)
 
 	var submission models.Submission
 	result := h.DB.Where("assignment_id = ? AND student_id = ?", assignmentID, studentID).First(&submission)

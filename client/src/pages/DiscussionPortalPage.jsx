@@ -3,8 +3,10 @@ import {
   ShieldCheck, Send, ThumbsUp, MessageSquare, 
   Lock, Users, BadgeCheck, Info
 } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
+
+const GLOBAL_COURSE_ID = '00000000-0000-0000-0000-000000000000';
 
 export default function DiscussionPortalPage() {
   const [posts, setPosts] = useState([]);
@@ -13,28 +15,35 @@ export default function DiscussionPortalPage() {
   const [loading, setLoading] = useState(false);
   const { user } = useAuthStore();
 
-  const isFaculty = user.role === 'faculty';
+  const isFaculty = user?.role === 'faculty' || user?.role === 'admin';
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const res = await api.get(`/api/productivity/v1/discussions/${GLOBAL_COURSE_ID}`);
+      setPosts(res.data || []);
+    } catch (err) {
+      console.error('Failed to load discussions', err);
+    }
+  };
 
   const handlePost = async () => {
     if (!newPost.trim()) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post('http://localhost:8080/api/v1/discussions', {
-        course_id: "CS101-ALGO",
+      await api.post('/api/productivity/v1/discussions', {
+        course_id: GLOBAL_COURSE_ID,
         content: newPost,
         is_anonymous: isFaculty ? false : isAnon // Faculty forced to non-anon
-      }, {
-        headers: { 
-          'x-auth-token': token,
-          'x-user-id': user.id 
-        }
       });
       
-      setPosts([{ ...res.data, author_name: isFaculty ? `${user.first_name} ${user.last_name}` : (isAnon ? 'Anonymous' : 'Me'), role: user.role }, ...posts]);
       setNewPost("");
+      fetchPosts(); // Refetch to get server-masked identities
     } catch (err) {
-      console.error("Post failed");
+      console.error("Post failed", err);
     } finally {
       setLoading(false);
     }
@@ -94,10 +103,12 @@ export default function DiscussionPortalPage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs font-black text-white">{post.author_name}</p>
+                      <p className="text-xs font-black text-white">{post.AuthorName || post.author_name || 'Student'}</p>
                       {post.role === 'faculty' && <BadgeCheck size={14} className="text-blue-400" />}
                     </div>
-                    <p className="text-[10px] text-gray-500 uppercase font-bold">Today</p>
+                    <p className="text-[10px] text-gray-500 uppercase font-bold">
+                      {new Date(post.CreatedAt || post.created_at || Date.now()).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
                 {post.role === 'faculty' && <span className="text-[10px] font-black text-blue-400 uppercase bg-blue-400/10 px-2 py-0.5 rounded">Faculty</span>}

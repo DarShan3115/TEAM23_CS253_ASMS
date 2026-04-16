@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Calendar, Flag, AlignLeft, Send } from 'lucide-react';
-import axios from 'axios';
+import api from '../../services/api';
+
+const PRODUCTIVITY_API = import.meta.env.VITE_PRODUCTIVITY_API_URL || '/api/productivity/v1';
 
 /**
  * ORGANISM: CreateAssignmentModal
@@ -17,19 +19,9 @@ export default function CreateAssignmentModal({ courseId, onClose, onSuccess }) 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user'));
-      
-      if (!user?.id) throw new Error("Unauthorized");
-
-      await axios.post('http://localhost:8080/api/v1/tasks', {
+      await api.post(`${PRODUCTIVITY_API}/tasks`, {
         ...formData,
         course_id: courseId
-      }, {
-        headers: { 
-          'x-auth-token': token, 
-          'x-user-id': user.id 
-        }
       });
       
       onSuccess();

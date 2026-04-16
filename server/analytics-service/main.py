@@ -1,12 +1,28 @@
-from fastapi import FastAPI, Header, HTTPException, Depends
+from fastapi import FastAPI, Header, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-import os
+import os, jwt
 from database import SessionLocal, engine
 import models, calculations
 
-# Ensure all missing tables (like attendance_logs) are created on startup
-models.Base.metadata.create_all(bind=engine)
+# ── JWT Verification ─────────────────────────────────────────────────────────
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+http_bearer = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Security(http_bearer)) -> dict:
+    """Validates the Bearer token and returns the payload."""
+    if not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="Server misconfiguration: JWT_SECRET not set")
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Access token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+# Analytics service is READ-ONLY — schema is managed by init.sql, not SQLAlchemy.
 
 app = FastAPI(
     title="ASMS Analytics Service",
@@ -50,13 +66,15 @@ def health_check():
 
 # --- STUDENT ANALYTICS ENDPOINT ---
 @app.get("/api/analytics/student/overview")
-def get_student_overview(x_user_id: str = Header(None), db: Session = Depends(get_db)):
+def get_student_overview(payload: dict = Depends(verify_token), db: Session = Depends(get_db)):
     """
     Returns GPA and subject-wise attendance for the logged-in student.
     Used by: Student Dashboard & Academic Progress Page.
     """
+    # Identity from verified JWT — not a forgeable header
+    x_user_id = payload.get("id") or payload.get("userId")
     if not x_user_id:
-        raise HTTPException(status_code=401, detail="User identification header (x-user-id) missing")
+        raise HTTPException(status_code=401, detail="Token missing user identity")
 
     # Fetch all enrollments for the student
     enrollments = db.query(models.Enrollment).filter(models.Enrollment.student_id == x_user_id).all()
@@ -98,14 +116,17 @@ def get_student_overview(x_user_id: str = Header(None), db: Session = Depends(ge
 
 # --- FACULTY ANALYTICS ENDPOINT ---
 @app.get("/api/analytics/faculty/risk-alerts")
-def get_faculty_risk_alerts(x_user_id: str = Header(None), db: Session = Depends(get_db)):
+def get_faculty_risk_alerts(payload: dict = Depends(verify_token), db: Session = Depends(get_db)):
     """
-    Identifies students in the faculty's classes who are at risk due to 
+    Identifies students in the faculty's classes who are at risk due to
     low attendance or poor grades.
     Used by: Faculty Dashboard.
     """
+    x_user_id = payload.get("id") or payload.get("userId")
     if not x_user_id:
-        raise HTTPException(status_code=401, detail="Faculty identification header (x-user-id) missing")
+        raise HTTPException(status_code=401, detail="Token missing user identity")
+    if payload.get("role") not in ("faculty", "admin"):
+        raise HTTPException(status_code=403, detail="Faculty access required")
     
     # Logic in calculations.py filters by instructor and applies risk thresholds
     alerts = calculations.identify_at_risk_students(db, x_user_id)
