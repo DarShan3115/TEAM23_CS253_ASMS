@@ -61,6 +61,15 @@ export default function DashboardPage() {
     }
   };
 
+  const handleToggleTask = async (taskId, currentStatus) => {
+    try {
+      await api.put(`${PRODUCTIVITY_API}/tasks/${taskId}`, { is_completed: !currentStatus });
+      setTasks(tasks.map(t => t.id === taskId ? { ...t, is_completed: !currentStatus } : t));
+    } catch (err) {
+      console.error('Failed to toggle task', err);
+    }
+  };
+
   // Filter timetable to today's day
   const todayName  = TODAY_DAYS[new Date().getDay()];
   const todaySched = timetable
@@ -219,9 +228,13 @@ export default function DashboardPage() {
                 <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-10 bg-zinc-900 animate-pulse rounded-lg" />)}</div>
               ) : pendingTasks.length > 0 ? (
                 pendingTasks.slice(0, 4).map(task => (
-                  <div key={task.id} className="relative pl-5 border-l-2 border-amber-500/30 pb-1">
-                    <div className="absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-zinc-950" />
-                    <h4 className="text-sm font-semibold text-white leading-tight">{task.title}</h4>
+                  <div key={task.id} className="relative pl-5 border-l-2 border-amber-500/30 pb-1 group">
+                    <button 
+                      onClick={() => handleToggleTask(task.id, task.is_completed)}
+                      className="absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-zinc-950 hover:bg-emerald-500 hover:scale-150 transition-all cursor-pointer z-10"
+                      title="Mark as done"
+                    />
+                    <h4 className="text-sm font-semibold text-white leading-tight group-hover:text-amber-100 transition-colors">{task.title}</h4>
                     <div className="flex items-center gap-2 mt-0.5">
                       {task.course_tag && <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{task.course_tag}</span>}
                       <p className="text-zinc-500 text-xs">Due: {task.due_date || 'No date'}</p>
