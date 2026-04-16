@@ -12,7 +12,7 @@ type Discussion struct {
 	AuthorName  string    `gorm:"-" json:"author_name"`         // Populated only if not anonymous
 	Content     string    `gorm:"type:text;not null" json:"content"`
 	IsAnonymous bool      `gorm:"default:true" json:"is_anonymous"`
-	Votes       int       `gorm:"default:0" json:"votes"`
+	ParentID    *uuid.UUID `gorm:"type:uuid;index" json:"parent_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

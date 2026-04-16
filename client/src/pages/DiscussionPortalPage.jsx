@@ -24,7 +24,7 @@ export default function DiscussionPortalPage() {
   const fetchPosts = async () => {
     try {
       const res = await api.get(`/api/productivity/v1/discussions/${GLOBAL_COURSE_ID}`);
-      setPosts(res.data || []);
+      setPosts(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load discussions', err);
     }

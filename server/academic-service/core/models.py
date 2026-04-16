@@ -1,5 +1,11 @@
 import uuid
+import random
+import string
 from django.db import models
+
+def generate_random_enrollment_key():
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for i in range(16))
 
 class User(models.Model):
     """
@@ -37,7 +43,7 @@ class Course(models.Model):
     semester = models.CharField(max_length=20)
     max_enrollment = models.IntegerField(default=60)
     is_active = models.BooleanField(default=True)
-    enrollment_key = models.CharField(max_length=50, default='1234')
+    enrollment_key = models.CharField(max_length=50, default=generate_random_enrollment_key)
 
     class Meta:
         managed = False

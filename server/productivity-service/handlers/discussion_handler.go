@@ -22,9 +22,10 @@ func (h *DiscussionHandler) GetDiscussions(c *gin.Context) {
 	
 	type Result struct {
 		models.Discussion
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Role      string `json:"role"`
+		AuthorID  uuid.UUID `json:"author_id"` // Override the hidden one for internal check
+		FirstName string    `json:"first_name"`
+		LastName  string    `json:"last_name"`
+		Role      string    `json:"role"`
 	}
 
 	var results []Result
@@ -60,6 +61,7 @@ func (h *DiscussionHandler) PostToDiscussion(c *gin.Context) {
 		CourseID    string `json:"course_id" binding:"required"`
 		Content     string `json:"content" binding:"required"`
 		IsAnonymous bool   `json:"is_anonymous"`
+		ParentID    string `json:"parent_id"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -78,12 +80,21 @@ func (h *DiscussionHandler) PostToDiscussion(c *gin.Context) {
 		finalAnon = false
 	}
 
+	var parentID *uuid.UUID
+	if input.ParentID != "" {
+		parsed, err := uuid.Parse(input.ParentID)
+		if err == nil {
+			parentID = &parsed
+		}
+	}
+
 	post := models.Discussion{
 		ID:          uuid.New(),
 		CourseID:    uuid.MustParse(input.CourseID),
 		AuthorID:    userID,
 		Content:     input.Content,
 		IsAnonymous: finalAnon,
+		ParentID:    parentID,
 	}
 
 	if err := h.DB.Create(&post).Error; err != nil {

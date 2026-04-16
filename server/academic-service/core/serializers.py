@@ -41,14 +41,15 @@ class FacultyCourseSerializer(serializers.ModelSerializer):
     Includes enrollment counts and placeholders for analytics.
     """
     students_count = serializers.SerializerMethodField()
-    avg_attendance = serializers.IntegerField(default=85) # Placeholder for Analytics Service link
-    avg_grade = serializers.CharField(default='B+')        # Placeholder for Analytics Service link
+    avg_attendance = serializers.IntegerField(default=85)  # Placeholder for Analytics Service link
+    avg_grade      = serializers.CharField(default='B+')   # Placeholder for Analytics Service link
+    enrollment_key = serializers.CharField(read_only=True)
 
     class Meta:
         model = Course
         fields = [
-            'id', 'code', 'title', 'students_count', 
-            'avg_attendance', 'avg_grade', 'semester'
+            'id', 'code', 'title', 'credits', 'semester',
+            'students_count', 'avg_attendance', 'avg_grade', 'enrollment_key'
         ]
 
     def get_students_count(self, obj):

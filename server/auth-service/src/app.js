@@ -9,6 +9,7 @@ const adminRoutes = require('./routes/admin.routes');
 require('./config/db'); // Initialize DB connection
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Nginx or Codespaces proxy) so rate limit works correctly
 
 // Explicit CORS allowlist — never reflect arbitrary origins
 const allowedOrigins = [

@@ -61,7 +61,7 @@ export default function TasksPage() {
             courseId:     course.id,     // real UUID for navigation
             title:        a.title,
             due_date:     a.due_date || null,
-            due_time:     null,
+            due_time:     a.due_date ? String(a.due_date).split('T')[1]?.substring(0, 5) : null,
             course_tag:   course.code,
             custom_tag:   course.code,
             is_completed: false,
@@ -333,15 +333,16 @@ export default function TasksPage() {
                         )}
                       </td>
                       <td className="p-4 w-32">
-                        {task.isAssignment || !task.due_time
+                        {!task.due_time
                           ? <span className="text-zinc-600 font-mono text-sm">—</span>
                           : (
                             <input
-                              type="time"
+                              type={task.isAssignment ? "text" : "time"}
                               value={formatTime(task.due_time)}
-                              onChange={e => handleTaskChange(task.id, 'due_time', e.target.value)}
-                              onBlur={() => !task.isNew && handleSaveTask(task)}
-                              className={`bg-transparent border-none text-zinc-300 font-mono text-sm outline-none cursor-pointer ${task.isNew ? 'bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 focus:border-blue-500' : 'px-2 py-1'}`}
+                              onChange={e => !task.isAssignment && handleTaskChange(task.id, 'due_time', e.target.value)}
+                              onBlur={() => !task.isNew && !task.isAssignment && handleSaveTask(task)}
+                              readOnly={task.isAssignment}
+                              className={`bg-transparent border-none text-zinc-300 font-mono text-sm outline-none ${!task.isAssignment ? 'cursor-pointer' : ''} ${task.isNew ? 'bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 focus:border-blue-500' : 'px-2 py-1'}`}
                             />
                         )}
                       </td>
