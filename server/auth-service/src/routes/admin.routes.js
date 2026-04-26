@@ -10,10 +10,14 @@ router.use(auth, adminGuard);
 // Platform Stats
 router.get('/stats', adminController.getPlatformStats);
 
+// Announcements
+router.post('/announcements/broadcast', adminController.broadcastAnnouncement);
+
 // User Management
 router.get('/users', adminController.listUsers);
 router.get('/users/:id', adminController.getUserById);
 router.post('/users', adminController.createUser);
+router.post('/users/bulk-generate', adminController.bulkGenerateUsers);
 router.put('/users/:id', adminController.editUser);
 router.delete('/users/:id', adminController.deleteUser);
 

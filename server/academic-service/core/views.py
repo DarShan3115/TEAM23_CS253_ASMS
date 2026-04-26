@@ -5,15 +5,18 @@ from django.db import connection
 from .models import Enrollment, Course, User
 from .serializers import ScheduleSerializer, CourseSerializer, FacultyCourseSerializer
 from django.core.exceptions import ValidationError
-import uuid
-import csv
-import io
-import os
-import random
-import string
-import smtplib
+import uuid, csv, io, os, random, string, smtplib
 from email.mime.text import MIMEText
 from django.core.files.storage import default_storage
+from django.conf import settings
+
+# Allowed file extensions for course resources (no video files)
+ALLOWED_RESOURCE_EXTENSIONS = {
+    'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+    'txt', 'md', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'svg',
+    'html', 'htm', 'zip'
+}
+ALLOWED_SUBMISSION_EXTENSIONS = {'pdf', 'zip', 'jpg', 'jpeg', 'png', 'docx', 'txt'}
 
 def generate_enrollment_key(length=16):
     characters = string.ascii_letters + string.digits
@@ -163,6 +166,33 @@ class UpdateFinalGradeView(APIView):
         except Enrollment.DoesNotExist:
             return Response({"error": "Enrollment record not found"}, status=status.HTTP_404_NOT_FOUND)
 
+class   BulkUpdateFinalGradeView(APIView):
+    """
+    POST /api/academic/courses/<course_id>/grades/csv/
+    """
+    def post(self, request, course_id):
+        if request.user.role not in ('faculty', 'admin'):
+            return Response({"error": "Faculty access required"}, status=status.HTTP_403_FORBIDDEN)
+            
+        grades_data = request.data.get('grades', [])
+        if not grades_data:
+            return Response({"error": "No grades provided"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        updated = 0
+        with connection.cursor() as cur:
+            for item in grades_data:
+                email = item.get('email', '').strip().lower()
+                grade = item.get('grade', '').strip()
+                if not email or not grade: continue
+                
+                cur.execute("SELECT id FROM users WHERE email=%s", [email])
+                row = cur.fetchone()
+                if row:
+                    cur.execute("UPDATE enrollments SET grade=%s WHERE student_id=%s AND course_id=%s", [grade, row[0], course_id])
+                    updated += cur.rowcount
+        
+        return Response({"message": f"Successfully updated {updated} official grades."})
+
 class MarkAttendanceView(APIView):
     """
     POST /api/attendance/mark/
@@ -239,6 +269,58 @@ class MarkAttendanceCSVView(APIView):
                         pass # Skip invalid rows or invalid UUIDs
 
             return Response({"message": f"Attendance saved for {saved} students from CSV on {date}"}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": f"Error processing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+class BiometricAttendanceView(APIView):
+    """
+    POST /api/attendance/mark/biometric/
+    Expects form-data with 'course_id', 'date', and 'file' (log file).
+    The file contains one email/username per line.
+    Any enrolled student NOT in the log file is marked absent.
+    """
+    def post(self, request):
+        course_id = request.data.get('course_id')
+        date = request.data.get('date')
+        file_obj = request.FILES.get('file')
+
+        if not all([course_id, date, file_obj]):
+            return Response({"error": "course_id, date, and file are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            decoded_file = file_obj.read().decode('utf-8')
+            lines = [line.strip().lower() for line in decoded_file.splitlines() if line.strip()]
+            
+            with connection.cursor() as cur:
+                # 1. Fetch all enrolled students
+                cur.execute("""
+                    SELECT e.student_id, u.email 
+                    FROM enrollments e 
+                    JOIN users u ON e.student_id::text = u.id::text 
+                    WHERE e.course_id = %s AND e.status = 'enrolled'
+                """, [course_id])
+                enrolled = cur.fetchall()
+                
+                # 2. Iterate and mark
+                saved = 0
+                for row in enrolled:
+                    student_id = row[0]
+                    email = row[1].lower()
+                    
+                    status_val = 'present' if email in lines else 'absent'
+                    
+                    try:
+                        cur.execute("""
+                            INSERT INTO attendance (id, course_id, student_id, date, status)
+                            VALUES (uuid_generate_v4(), %s, %s, %s, %s)
+                            ON CONFLICT (course_id, student_id, date)
+                            DO UPDATE SET status = EXCLUDED.status
+                        """, [course_id, student_id, date, status_val])
+                        saved += 1
+                    except Exception:
+                        pass
+                        
+            return Response({"message": f"Biometric log processed. {saved} attendance records created/updated."}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": f"Error processing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -331,37 +413,73 @@ class CourseAnnouncementsView(APIView):
 
 
 class CourseResourcesView(APIView):
-    """GET/POST /api/courses/<course_id>/resources/"""
+    """GET/POST /api/academic/courses/<course_id>/resources/
+    
+    Faculty can upload PDF, Office docs, images (no video).
+    Files are stored in /media/resources/ and served via Django's media serving.
+    """
     def get(self, request, course_id):
         with connection.cursor() as cur:
-            cur.execute("SELECT id, title, resource_type, file_url, created_at FROM resources WHERE course_id = %s ORDER BY created_at DESC", [course_id])
+            cur.execute(
+                "SELECT id, title, resource_type, file_url, file_name, file_size, created_at "
+                "FROM resources WHERE course_id = %s ORDER BY created_at DESC",
+                [course_id]
+            )
             rows = cur.fetchall()
-        return Response([{'id': str(r[0]), 'title': r[1], 'resource_type': r[2], 'file_url': r[3], 'created_at': r[4]} for r in rows])
+        return Response([{
+            'id': str(r[0]), 'title': r[1], 'resource_type': r[2],
+            'file_url': r[3], 'file_name': r[4], 'file_size': r[5], 'created_at': r[6]
+        } for r in rows])
 
     def post(self, request, course_id):
         if request.user.role not in ('faculty', 'admin'):
             return Response({"error": "Faculty access required"}, status=status.HTTP_403_FORBIDDEN)
 
-        title = request.data.get('title')
-        resource_type = request.data.get('resource_type', 'other')
-        file_url = request.data.get('file_url', '')
-        
+        title = request.data.get('title', '').strip()
+        resource_type = request.data.get('resource_type', 'lecture')
+        file_url = request.data.get('file_url', '').strip()
+        file_name = None
+        file_size = None
+
         file_obj = request.FILES.get('file')
         if file_obj:
-            ext = file_obj.name.split('.')[-1] if '.' in file_obj.name else ''
-            new_file_name = f"{uuid.uuid4()}.{ext}"
-            saved_path = default_storage.save(f"resources/{new_file_name}", file_obj)
-            file_url = f"http://localhost:8000/media/{saved_path}"
+            # Validate file type — no video files allowed
+            ext = file_obj.name.rsplit('.', 1)[-1].lower() if '.' in file_obj.name else ''
+            if ext not in ALLOWED_RESOURCE_EXTENSIONS:
+                return Response(
+                    {"error": f"File type '.{ext}' is not allowed. Permitted: PDF, Office docs, images, ZIP."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Enforce 10MB limit
+            if file_obj.size > 10 * 1024 * 1024:
+                return Response({"error": "File too large. Maximum size is 10MB."}, status=status.HTTP_400_BAD_REQUEST)
+
+            file_name = file_obj.name
+            file_size = file_obj.size
+            safe_name = f"{uuid.uuid4()}.{ext}"
+            saved_path = default_storage.save(f"resources/{safe_name}", file_obj)
+            # Return a relative /media/ URL — the Vite proxy or Nginx serves this
+            file_url = f"/media/{saved_path}"
+            if not title:
+                title = file_obj.name.rsplit('.', 1)[0]  # Use filename as title if none given
+
+        if not title:
+            return Response({"error": "Title is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         uploader_id = str(request.user.id)
         new_id = str(uuid.uuid4())
         with connection.cursor() as cur:
             cur.execute(
-                "INSERT INTO resources (id, course_id, uploader_id, title, resource_type, file_url) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, title, resource_type, file_url, created_at",
-                [new_id, course_id, uploader_id, title, resource_type, file_url]
+                "INSERT INTO resources (id, course_id, uploader_id, title, resource_type, file_url, file_name, file_size) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id, title, resource_type, file_url, file_name, file_size, created_at",
+                [new_id, course_id, uploader_id, title, resource_type, file_url, file_name, file_size]
             )
             row = cur.fetchone()
-        return Response({'id': str(row[0]), 'title': row[1], 'resource_type': row[2], 'file_url': row[3], 'created_at': row[4]}, status=status.HTTP_201_CREATED)
+        return Response({
+            'id': str(row[0]), 'title': row[1], 'resource_type': row[2],
+            'file_url': row[3], 'file_name': row[4], 'file_size': row[5], 'created_at': row[6]
+        }, status=status.HTTP_201_CREATED)
 
 
 class ResourceDeleteView(APIView):
@@ -376,40 +494,169 @@ class ResourceDeleteView(APIView):
 
 
 class CourseAssignmentsView(APIView):
-    """GET/POST /api/courses/<course_id>/assignments/"""
+    """GET/POST /api/academic/courses/<course_id>/assignments/"""
     def get(self, request, course_id):
         with connection.cursor() as cur:
-            cur.execute("SELECT id, title, description, due_date, max_marks, weightage, created_at, file_url FROM assignments WHERE course_id = %s ORDER BY created_at DESC", [course_id])
+            cur.execute(
+                "SELECT id, title, description, due_date, max_marks, weightage, created_at, file_url, storage_url "
+                "FROM assignments WHERE course_id = %s ORDER BY created_at DESC",
+                [course_id]
+            )
             rows = cur.fetchall()
-        return Response([{'id': str(r[0]), 'title': r[1], 'description': r[2], 'due_date': r[3], 'max_marks': r[4], 'weightage': r[5], 'created_at': r[6], 'file_url': r[7]} for r in rows])
+        return Response([{
+            'id': str(r[0]), 'title': r[1], 'description': r[2], 'due_date': r[3],
+            'max_marks': r[4], 'weightage': r[5], 'created_at': r[6], 'file_url': r[7], 'storage_url': r[8]
+        } for r in rows])
 
     def post(self, request, course_id):
         if request.user.role not in ('faculty', 'admin'):
             return Response({"error": "Faculty access required"}, status=status.HTTP_403_FORBIDDEN)
 
-        title = request.data.get('title')
+        title = request.data.get('title', '').strip()
+        if not title:
+            return Response({"error": "Assignment title is required."}, status=status.HTTP_400_BAD_REQUEST)
+
         description = request.data.get('description', '')
-        due_date = request.data.get('due_date')
+        due_date = request.data.get('due_date') or None
         max_marks = request.data.get('max_marks', 100)
         weightage = request.data.get('weightage', 10)
-        file_obj = request.FILES.get('file')
+        storage_url = request.data.get('storage_url') or None
         file_url = None
 
+        file_obj = request.FILES.get('file')
         if file_obj:
+            ext = file_obj.name.rsplit('.', 1)[-1].lower() if '.' in file_obj.name else ''
+            if ext not in ALLOWED_RESOURCE_EXTENSIONS:
+                return Response(
+                    {"error": f"File type '.{ext}' is not allowed for assignment attachments."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if file_obj.size > 10 * 1024 * 1024:
+                return Response({"error": "File too large. Maximum size is 10MB."}, status=status.HTTP_400_BAD_REQUEST)
             try:
-                save_path = f'assignments/{course_id}/{uuid.uuid4()}_{file_obj.name}'
-                file_url = default_storage.save(save_path, file_obj)
+                safe_name = f"{uuid.uuid4()}.{ext}"
+                save_path = f'assignments/{course_id}/{safe_name}'
+                default_storage.save(save_path, file_obj)
+                file_url = f"/media/{save_path}"
             except Exception as e:
                 print(f'[WARN] Could not save assignment file: {e}')
 
         new_id = str(uuid.uuid4())
         with connection.cursor() as cur:
             cur.execute(
-                "INSERT INTO assignments (id, course_id, title, description, due_date, max_marks, weightage, file_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, title, max_marks, weightage, file_url",
-                [new_id, course_id, title, description, due_date, max_marks, weightage, file_url]
+                "INSERT INTO assignments (id, course_id, title, description, due_date, max_marks, weightage, file_url, storage_url) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id, title, description, due_date, max_marks, weightage, file_url, storage_url, created_at",
+                [new_id, course_id, title, description, due_date, max_marks, weightage, file_url, storage_url]
             )
             row = cur.fetchone()
-        return Response({'id': str(row[0]), 'title': row[1], 'max_marks': row[2], 'weightage': row[3], 'file_url': row[4]}, status=status.HTTP_201_CREATED)
+        return Response({
+            'id': str(row[0]), 'title': row[1], 'description': row[2], 'due_date': row[3],
+            'max_marks': row[4], 'weightage': row[5], 'file_url': row[6], 'storage_url': row[7], 'created_at': row[8]
+        }, status=status.HTTP_201_CREATED)
+
+
+class AssignmentDetailView(APIView):
+    """GET /api/academic/courses/<course_id>/assignments/<assignment_id>/"""
+    def get(self, request, course_id, assignment_id):
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, description, due_date, max_marks, weightage, file_url, storage_url, created_at "
+                "FROM assignments WHERE id = %s AND course_id = %s",
+                [assignment_id, course_id]
+            )
+            row = cur.fetchone()
+        if not row:
+            return Response({"error": "Assignment not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'id': str(row[0]), 'title': row[1], 'description': row[2], 'due_date': row[3],
+            'max_marks': row[4], 'weightage': row[5], 'file_url': row[6], 'storage_url': row[7], 'created_at': row[8]
+        })
+
+class StudentGradesheetView(APIView):
+    """GET /api/academic/students/<student_id>/gradesheet/"""
+    def get(self, request, student_id):
+        if request.user.role not in ('admin', 'faculty') and str(request.user.id) != student_id:
+            return Response({"error": "Unauthorized"}, status=403)
+            
+        with connection.cursor() as cur:
+            cur.execute("""
+                SELECT c.code, c.title, c.semester, c.credits, e.grade
+                FROM enrollments e
+                JOIN courses c ON e.course_id = c.id
+                WHERE e.student_id = %s AND e.status = 'completed' AND e.grade IS NOT NULL
+                ORDER BY c.semester ASC, c.code ASC
+            """, [student_id])
+            
+            rows = cur.fetchall()
+            grade_points = {'A*': 10, 'A': 10, 'B+': 9, 'B': 8, 'C+': 7, 'C': 6, 'D+': 5, 'D': 4, 'E': 0, 'F': 0}
+            semesters = {}
+            total_cpi_credits = 0
+            total_cpi_points = 0
+            courses_data = []
+            
+            for row in rows:
+                code, title, sem, credits, grade_str = row
+                pt = grade_points.get(grade_str, 0)
+                courses_data.append({
+                    "code": code, "title": title, "semester": sem, 
+                    "credits": credits, "grade": grade_str, "points": pt
+                })
+                
+                if sem not in semesters:
+                    semesters[sem] = {"earned_points": 0, "credits": 0}
+                semesters[sem]["earned_points"] += (pt * credits)
+                semesters[sem]["credits"] += credits
+                total_cpi_points += (pt * credits)
+                total_cpi_credits += credits
+                
+            spi_data = []
+            for sem, data in semesters.items():
+                spi = data["earned_points"] / data["credits"] if data["credits"] > 0 else 0
+                spi_data.append({"semester": sem, "spi": round(spi, 2)})
+                
+            cpi = total_cpi_points / total_cpi_credits if total_cpi_credits > 0 else 0
+            
+            cur.execute("SELECT first_name, last_name, email FROM users WHERE id = %s", [student_id])
+            user_row = cur.fetchone()
+            user_details = {}
+            if user_row:
+                user_details = {"first_name": user_row[0], "last_name": user_row[1], "email": user_row[2]}
+            
+            return Response({
+                "student": user_details,
+                "cpi": round(cpi, 2),
+                "spi_history": spi_data,
+                "transcripts": courses_data
+            })
+
+
+
+class StudentSubmissionStatusView(APIView):
+    """GET /api/academic/courses/<course_id>/assignments/<assignment_id>/my-submission/
+    Returns the student's own submission record (if any) for a given assignment.
+    """
+    def get(self, request, course_id, assignment_id):
+        student_id = str(request.user.id)
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT id, content, file_url, marks, grade, feedback, submitted_at "
+                "FROM submissions WHERE assignment_id = %s AND student_id = %s",
+                [assignment_id, student_id]
+            )
+            row = cur.fetchone()
+        if not row:
+            return Response({"submitted": False})
+        return Response({
+            "submitted": True,
+            "id": str(row[0]),
+            "content": row[1],
+            "file_url": row[2],
+            "marks": row[3],
+            "grade": str(row[4]) if row[4] else None,
+            "feedback": row[5],
+            "submitted_at": row[6],
+        })
 
 class MyTimetableView(APIView):
     """GET /api/timetable/"""
@@ -561,3 +808,86 @@ class AssignmentSubmitView(APIView):
             row = cursor.fetchone()
 
         return Response({"message": "Submission received.", "submission_id": str(row[0]) if row else None}, status=status.HTTP_201_CREATED)
+
+class CourseAdminView(APIView):
+    """
+    POST /api/academic/admin/courses
+    Allows admins to create new courses.
+    """
+    def post(self, request):
+        if request.user.role != 'admin':
+            return Response({"error": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+            
+        code = request.data.get('code')
+        title = request.data.get('title')
+        description = request.data.get('description', '')
+        credits_val = request.data.get('credits', 3)
+        instructor_id = request.data.get('instructor_id') or None
+        
+        if not code or not title:
+            return Response({"error": "Course code and title are required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            with connection.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO courses (id, code, title, description, credits, instructor_id)
+                    VALUES (uuid_generate_v4(), %s, %s, %s, %s, %s)
+                    RETURNING id, code, title
+                """, [code, title, description, credits_val, instructor_id])
+                row = cur.fetchone()
+            return Response({"message": "Course created", "course": {"id": str(row[0]), "code": row[1], "title": row[2]}}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": f"Failed to create course. Maybe code already exists? Details: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CourseExamsView(APIView):
+    """
+    GET /api/academic/courses/<course_id>/exams/
+    POST /api/academic/courses/<course_id>/exams/
+    Allows Admin (Mid/End sem) and Faculty (Quizzes) to create exam schedules.
+    """
+    def get(self, request, course_id):
+        with connection.cursor() as cur:
+            cur.execute("""
+                SELECT id, exam_type, exam_date, start_time, duration_minutes, venue, weightage
+                FROM exams WHERE course_id = %s ORDER BY exam_date ASC, start_time ASC
+            """, [course_id])
+            rows = cur.fetchall()
+            
+        return Response([{
+            'id': str(r[0]), 'exam_type': r[1], 'exam_date': r[2], 'start_time': r[3],
+            'duration_minutes': r[4], 'venue': r[5], 'weightage': r[6]
+        } for r in rows])
+        
+    def post(self, request, course_id):
+        role = request.user.role
+        if role not in ('faculty', 'admin'):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            
+        exam_type = request.data.get('exam_type') # 'quiz', 'mid_sem', 'end_sem'
+        
+        # Enforce rule: only admins create mid_sem/end_sem, faculty creates quiz
+        if exam_type in ('mid_sem', 'end_sem') and role != 'admin':
+            return Response({"error": "Only Admins can schedule Mid/End Semester exams."}, status=status.HTTP_403_FORBIDDEN)
+        if exam_type == 'quiz' and role != 'faculty':
+            return Response({"error": "Only Professors can schedule Quizzes."}, status=status.HTTP_403_FORBIDDEN)
+            
+        exam_date = request.data.get('exam_date')
+        start_time = request.data.get('start_time')
+        duration = request.data.get('duration_minutes', 60)
+        venue = request.data.get('venue')
+        weightage = request.data.get('weightage', 0)
+        
+        if not all([exam_type, exam_date, start_time]):
+            return Response({"error": "Type, Date, and Start Time are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            with connection.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO exams (id, course_id, exam_type, exam_date, start_time, duration_minutes, venue, weightage)
+                    VALUES (uuid_generate_v4(), %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, [course_id, exam_type, exam_date, start_time, duration, venue, weightage])
+                row = cur.fetchone()
+            return Response({"message": "Exam scheduled successfully", "id": str(row[0])}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": f"Failed to schedule exam: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

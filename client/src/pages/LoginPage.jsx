@@ -95,9 +95,8 @@ export default function LoginPage() {
                 })}
               </div>
 
-              <p className="mt-5 text-center text-sm text-zinc-500">
-                No account?{' '}
-                <Link to="/register" className="text-blue-400 hover:text-blue-300">Register</Link>
+              <p className="mt-5 text-center text-xs text-zinc-600">
+                Contact your department administrator for account credentials.
               </p>
             </div>
           ) : (
@@ -148,9 +147,8 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              <p className="mt-4 text-center text-sm text-zinc-500">
-                No account?{' '}
-                <Link to="/register" className="text-blue-400 hover:text-blue-300">Register</Link>
+              <p className="mt-4 text-center text-xs text-zinc-600">
+                Registration is managed by the system administrator.
               </p>
             </div>
           )}

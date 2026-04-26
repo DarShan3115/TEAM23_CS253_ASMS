@@ -74,6 +74,28 @@ function InfoTab({ course }) {
 
   const formatTime = (t) => t?.substring(0, 5) || '—';
 
+  const handleBulkInvite = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const emails = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && l.includes('@'));
+      if (!emails.length) {
+        setScheduleMsg({ type: 'error', text: 'No valid emails found.' });
+        return;
+      }
+      try {
+        setScheduleMsg({ type: 'success', text: `Dispatching to ${emails.length} addresses. Wait...` });
+        const res = await api.post(`${ACADEMIC}/courses/${course.id}/invite/`, { emails });
+        setScheduleMsg({ type: 'success', text: res.data.message });
+      } catch (err) {
+        setScheduleMsg({ type: 'error', text: err.response?.data?.error || 'Email dispatch failed.' });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleDeleteCourse = async () => {
     if (deleteInput !== course.code) return;
     try {
@@ -156,6 +178,15 @@ function InfoTab({ course }) {
             <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl text-zinc-400 text-sm leading-relaxed italic">
               {course?.description || 'No description provided.'}
             </div>
+          </div>
+
+          <div className="bg-blue-900/10 border border-blue-500/20 p-5 rounded-2xl w-full">
+            <h3 className="text-white font-bold mb-1 flex items-center gap-2"><Send size={16} className="text-blue-400"/> Mass Email Invitation (.CSV/.TXT)</h3>
+            <p className="text-xs text-blue-400/80 mb-4">Upload a file with one email address per line to automatically dispatch the secure 16-character enrollment key.</p>
+            <label className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors inline-block text-sm">
+              Choose File & Dispatch
+              <input type="file" accept=".csv,.txt" className="hidden" onChange={handleBulkInvite} />
+            </label>
           </div>
 
           <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl space-y-4">
@@ -254,81 +285,214 @@ function AnnouncementsTab({ courseId }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Resources
+// Tab: Resources — Faculty Material Upload
 // ---------------------------------------------------------------------------
+const FILE_TYPE_STYLES = {
+  pdf:  { label: 'PDF',  color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20'  },
+  doc:  { label: 'DOC',  color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
+  docx: { label: 'DOCX', color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
+  ppt:  { label: 'PPT',  color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  pptx: { label: 'PPTX', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  xls:  { label: 'XLS',  color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
+  xlsx: { label: 'XLSX', color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
+  png:  { label: 'IMG',  color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
+  jpg:  { label: 'IMG',  color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
+  jpeg: { label: 'IMG',  color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
+  zip:  { label: 'ZIP',  color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+};
+const getFileStyle = (filename = '') => {
+  const ext = filename.split('.').pop().toLowerCase();
+  return FILE_TYPE_STYLES[ext] || { label: ext.toUpperCase(), color: 'text-zinc-400', bg: 'bg-zinc-800', border: 'border-zinc-700' };
+};
+const fmtSize = (bytes) => {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 function ResourcesTab({ courseId }) {
-  const [resources, setResources] = useState({ lecture: [], other: [] });
-  const [form, setForm] = useState({ title: '', resource_type: 'lecture', file_url: '' });
+  const [resources, setResources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [resourceType, setResourceType] = useState('lecture');
+  const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState({});
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = React.useRef();
 
-  useEffect(() => {
-    api.get(`${ACADEMIC}/courses/${courseId}/resources/`).then(r => {
-      const all = r.data || [];
-      setResources({ lecture: all.filter(x => x.resource_type === 'lecture'), other: all.filter(x => x.resource_type === 'other') });
-    }).catch(() => {});
-  }, [courseId]);
-
-  const handleAdd = async (e) => {
-    e.preventDefault();
+  const fetchResources = async () => {
     try {
-      const res = await api.post(`${ACADEMIC}/courses/${courseId}/resources/`, form);
-      const updated = { ...resources };
-      updated[form.resource_type] = [...updated[form.resource_type], res.data];
-      setResources(updated);
-      setForm({ title: '', resource_type: 'lecture', file_url: '' });
-      setMsg({ type: 'success', text: 'Resource added.' });
+      const res = await api.get(`${ACADEMIC}/courses/${courseId}/resources/`);
+      setResources(Array.isArray(res.data) ? res.data : []);
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchResources(); }, [courseId]);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setUploadFile(file);
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!uploadFile) return;
+    setUploading(true);
+    setMsg({});
+    const fd = new FormData();
+    fd.append('file', uploadFile);
+    fd.append('title', uploadTitle || uploadFile.name.replace(/\.[^.]+$/, ''));
+    fd.append('resource_type', resourceType);
+    try {
+      const res = await api.post(`${ACADEMIC}/courses/${courseId}/resources/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setResources(prev => [res.data, ...prev]);
+      setUploadFile(null);
+      setUploadTitle('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setMsg({ type: 'success', text: `"${res.data.title}" uploaded successfully.` });
     } catch (err) {
-      setMsg({ type: 'error', text: 'Failed to add resource.' });
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Upload failed. Check file type and size (max 10MB).' });
+    } finally {
+      setUploading(false);
     }
   };
 
-  const ResourceList = ({ items, type }) => (
-    <div>
-      <h3 className="text-white font-bold text-lg border-b border-zinc-800 pb-3 mb-4">
-        {type === 'lecture' ? '📑 Lecture Notes' : '📎 Other Resources'}
-      </h3>
-      {items.length === 0 ? <p className="text-zinc-500 italic text-sm">No resources uploaded yet.</p> : (
-        <ul className="space-y-2">
-          {items.map(r => (
-            <li key={r.id} className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group">
-              <div className="flex items-center gap-3">
-                <FileText size={16} className="text-blue-400" />
-                <a href={r.file_url || '#'} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 font-medium text-sm">{r.title}</a>
-              </div>
-              <button onClick={() => handleDelete(r.id, type)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 rounded-lg text-red-400 transition-all"><Trash2 size={14} /></button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`${ACADEMIC}/resources/${id}/`);
+      setResources(prev => prev.filter(r => r.id !== id));
+    } catch {
+      setMsg({ type: 'error', text: 'Failed to delete resource.' });
+    }
+  };
+
+  const lectures = resources.filter(r => r.resource_type === 'lecture');
+  const others   = resources.filter(r => r.resource_type !== 'lecture');
+
+  const ResourceRow = ({ r }) => {
+    const style = getFileStyle(r.file_name || r.title);
+    return (
+      <div className="flex items-center gap-4 p-3.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl group transition-all">
+        <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-black border ${style.bg} ${style.color} ${style.border}`}>
+          {style.label}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white truncate">{r.title}</p>
+          {r.file_size && <p className="text-[10px] text-zinc-600 mt-0.5">{fmtSize(r.file_size)}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {r.file_url && (
+            <a href={r.file_url} target="_blank" rel="noopener noreferrer"
+              className="p-2 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+              title="Open / Download">
+              <FileText size={14} />
+            </a>
+          )}
+          <button onClick={() => handleDelete(r.id)}
+            className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+            title="Delete">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8">
-      <form onSubmit={handleAdd} className="bg-zinc-950 border border-zinc-800 p-6 rounded-2xl space-y-4">
-        <h3 className="text-white font-bold text-lg flex items-center gap-2"><Upload size={18} className="text-blue-400" /> Add Resource</h3>
+      {/* Upload Panel */}
+      <form onSubmit={handleUpload} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-5">
+        <h3 className="text-white font-bold text-lg flex items-center gap-2">
+          <Upload size={18} className="text-blue-400" /> Upload Course Material
+        </h3>
+        <p className="text-xs text-zinc-500">Allowed: PDF, Office docs (DOCX, PPTX, XLSX), Images, ZIP · No video files · Max 10MB</p>
+
+        {/* Drop Zone */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+            dragOver ? 'border-blue-500 bg-blue-500/5' : uploadFile ? 'border-green-500/60 bg-green-500/5' : 'border-zinc-700 hover:border-zinc-600'
+          }`}
+        >
+          <Upload size={28} className={`mx-auto mb-2 ${uploadFile ? 'text-green-400' : 'text-zinc-600'}`} />
+          {uploadFile ? (
+            <div>
+              <p className="text-sm font-bold text-green-400">{uploadFile.name}</p>
+              <p className="text-xs text-zinc-500 mt-1">{fmtSize(uploadFile.size)} · Click to change</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-bold text-zinc-400">Drag & drop a file here or click to browse</p>
+              <p className="text-xs text-zinc-600 mt-1">PDF, PPTX, DOCX, XLSX, images, ZIP</p>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.jpg,.jpeg,.png,.gif,.svg,.html,.zip"
+            onChange={e => setUploadFile(e.target.files[0])}
+          />
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Resource Title</label>
-            <input className={inputClass} required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Lecture 4: Searching Algorithms" />
+            <label className={labelClass}>Resource Title (optional)</label>
+            <input className={inputClass} value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
+              placeholder={uploadFile ? uploadFile.name.replace(/\.[^.]+$/, '') : 'e.g. Week 4 — Sorting Algorithms'} />
           </div>
           <div>
             <label className={labelClass}>Category</label>
-            <select className={inputClass} value={form.resource_type} onChange={e => setForm({ ...form, resource_type: e.target.value })}>
-              <option value="lecture">Lecture Notes</option>
-              <option value="other">Other Resource</option>
+            <select className={inputClass} value={resourceType} onChange={e => setResourceType(e.target.value)}>
+              <option value="lecture">📑 Lecture Notes / Slides</option>
+              <option value="other">📎 Other Resource</option>
             </select>
           </div>
         </div>
-        <div>
-          <label className={labelClass}>File URL / Link</label>
-          <input className={inputClass} value={form.file_url} onChange={e => setForm({ ...form, file_url: e.target.value })} placeholder="https://drive.google.com/..." />
-        </div>
+
         <Feedback msg={msg} />
-        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center gap-2"><Save size={16} /> Save Resource</button>
+        <button type="submit" disabled={!uploadFile || uploading}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center gap-2">
+          {uploading ? <><span className="animate-spin">↻</span> Uploading…</> : <><Upload size={16} /> Upload File</>}
+        </button>
       </form>
-      <ResourceList items={resources.lecture} type="lecture" />
-      <ResourceList items={resources.other} type="other" />
+
+      {/* Material Lists */}
+      {loading ? (
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800" />)}</div>
+      ) : (
+        <>
+          {/* Lecture Notes */}
+          <div className="space-y-3">
+            <h3 className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2">
+              📑 Lecture Notes & Slides <span className="text-zinc-600 font-medium normal-case">({lectures.length})</span>
+            </h3>
+            {lectures.length === 0
+              ? <p className="text-sm text-zinc-600 italic py-4 text-center border-2 border-dashed border-zinc-800 rounded-xl">No lecture materials uploaded yet.</p>
+              : <div className="space-y-2">{lectures.map(r => <ResourceRow key={r.id} r={r} />)}</div>
+            }
+          </div>
+
+          {/* Other Resources */}
+          {others.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                📎 Other Resources <span className="text-zinc-600 font-medium normal-case">({others.length})</span>
+              </h3>
+              <div className="space-y-2">{others.map(r => <ResourceRow key={r.id} r={r} />)}</div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -365,18 +529,51 @@ function AttendanceTab({ courseId }) {
     }
   };
 
+  const handleBiometricUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result.toLowerCase();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      
+      const newAttendance = {};
+      students.forEach(s => {
+        const emailMatch = lines.includes(s.email.toLowerCase());
+        const nameMatch = lines.includes(s.first_name.toLowerCase()) || lines.includes((s.first_name + ' ' + s.last_name).toLowerCase());
+        newAttendance[s.id] = (emailMatch || nameMatch) ? 'present' : 'absent';
+      });
+      setAttendance(newAttendance);
+      setMsg({ type: 'success', text: `Biometric log loaded. Marked ${Object.values(newAttendance).filter(v => v === 'present').length} present. Review and Save.` });
+    };
+    reader.readAsText(file);
+  };
+
   const statusColors = { present: 'bg-green-500', absent: 'bg-red-500', late: 'bg-yellow-500' };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
-        <div>
-          <label className={labelClass}>Date</label>
-          <input type="date" className={inputClass + ' w-48'} value={date} onChange={e => setDate(e.target.value)} />
+      <div className="flex flex-col sm:flex-row gap-4 justify-between bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
+        <div className="flex flex-col gap-4 w-full">
+          <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+            <UserCheck className="text-blue-500" /> <h3 className="text-white font-bold tracking-wide text-sm">Attendance Control</h3>
+          </div>
+          <div className="flex flex-wrap items-end gap-5 justify-between">
+            <div>
+              <label className={labelClass}>Date Record</label>
+              <input type="date" className={inputClass + ' w-48'} value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            
+            <div className="flex flex-col gap-1 items-start bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-1 max-w-sm">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-black px-2">Advance Biometric Log (.txt/.csv)</label>
+              <input type="file" accept=".txt,.log,.csv" onChange={handleBiometricUpload} className="w-full text-xs text-zinc-400 file:bg-zinc-800 file:text-zinc-300 file:border-0 file:rounded-lg file:px-3 file:py-1.5 cursor-pointer outline-none" />
+            </div>
+
+            <button onClick={handleMark} className="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0">
+               Save Attendance
+            </button>
+          </div>
         </div>
-        <button onClick={handleMark} className="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2.5 rounded-xl transition-all flex items-center gap-2">
-          <UserCheck size={16} /> Save Attendance
-        </button>
       </div>
 
       <Feedback msg={msg} />
@@ -468,6 +665,7 @@ function MarksTab({ courseId }) {
     formData.append('due_date', newAssignment.due_date);
     formData.append('max_marks', newAssignment.max_marks);
     formData.append('weightage', newAssignment.weightage);
+    if (newAssignment.storage_url) formData.append('storage_url', newAssignment.storage_url);
     if (uploadFile) formData.append('file', uploadFile);
 
     try {
@@ -475,7 +673,7 @@ function MarksTab({ courseId }) {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setAssignments([...assignments, res.data]);
-      setNewAssignment({ title: '', description: '', due_date: '', max_marks: 100, weightage: 10 });
+      setNewAssignment({ title: '', description: '', due_date: '', max_marks: 100, weightage: 10, storage_url: '' });
       setUploadFile(null);
       setShowCreateForm(false);
       setMsg({ type: 'success', text: 'Assessment created!' });
@@ -484,8 +682,48 @@ function MarksTab({ courseId }) {
     }
   };
 
+  const handleBulkFinalGrades = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const grades = [];
+      lines.forEach((line, idx) => {
+        if(idx === 0 && line.toLowerCase().includes('email')) return; // skip header
+        const parts = line.split(',');
+        if (parts.length >= 2) {
+            grades.push({ email: parts[0], grade: parts[1] });
+        }
+      });
+      if (grades.length === 0) {
+        setMsg({ type: 'error', text: 'No valid grades found in CSV.' });
+        return;
+      }
+      try {
+        setMsg({ type: 'success', text: `Syncing ${grades.length} grades...` });
+        const res = await api.post(`${ACADEMIC}/courses/${courseId}/grades/csv/`, { grades });
+        setMsg({ type: 'success', text: res.data.message });
+      } catch (err) {
+         setMsg({ type: 'error', text: err.response?.data?.error || 'Grade sync failed.' });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="space-y-6">
+      
+      <div className="bg-green-900/10 border border-green-500/20 p-5 rounded-2xl w-full mb-6 relative overflow-hidden">
+        <h3 className="text-white font-bold mb-1 flex items-center gap-2"><Award size={16} className="text-green-400"/> Official Final Course Grades (.CSV)</h3>
+        <p className="text-xs text-green-400/80 mb-4">Upload a CSV file containing <code>email,grade</code> (e.g. <code>student@iitk.ac.in,A</code>) to seamlessly post official transcript grades into the DB for CPI/SPI calculations.</p>
+        <label className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors inline-block text-sm">
+          Upload Final Grades CSV
+          <input type="file" accept=".csv" className="hidden" onChange={handleBulkFinalGrades} />
+        </label>
+      </div>
+
       <div className="flex justify-between items-center">
         <h3 className="text-white font-bold text-lg">Assessments & Grading</h3>
         <button onClick={() => setShowCreateForm(!showCreateForm)} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all text-sm">
@@ -523,6 +761,10 @@ function MarksTab({ courseId }) {
             />
           </div>
           <div>
+            <label className={labelClass}>Server Location for Student Submissions (Optional)</label>
+            <input className={inputClass} type="url" value={newAssignment.storage_url || ''} onChange={e => setNewAssignment({ ...newAssignment, storage_url: e.target.value })} placeholder="e.g. https://your-server.com/upload" />
+          </div>
+          <div>
             <label className={labelClass}>Description / Instructions</label>
             <textarea className={inputClass} rows={2} value={newAssignment.description} onChange={e => setNewAssignment({ ...newAssignment, description: e.target.value })} placeholder="Instructions for students…" />
           </div>
@@ -550,11 +792,18 @@ function MarksTab({ courseId }) {
 
       {selectedAssignment && (
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between">
+            <p className="text-sm font-bold text-white">
+              Submissions — <span className="text-blue-400">{assignments.find(a => a.id === selectedAssignment)?.title}</span>
+            </p>
+            <span className="text-xs text-zinc-500">{submissions.length} submission{submissions.length !== 1 ? 's' : ''}</span>
+          </div>
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-zinc-900 border-b border-zinc-800 text-zinc-500 text-xs font-bold uppercase tracking-widest">
+              <tr className="bg-zinc-900/50 border-b border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
                 <th className="p-4">Student</th>
-                <th className="p-4">Submitted</th>
+                <th className="p-4">Submission</th>
+                <th className="p-4">Date</th>
                 <th className="p-4 w-32">Marks</th>
                 <th className="p-4">Feedback</th>
                 <th className="p-4 w-20"></th>
@@ -562,10 +811,25 @@ function MarksTab({ courseId }) {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {submissions.length === 0 ? (
-                <tr><td colSpan={5} className="text-center p-8 text-zinc-500 italic">No submissions yet.</td></tr>
+                <tr><td colSpan={6} className="text-center p-8 text-zinc-500 italic">No submissions yet.</td></tr>
               ) : submissions.map(sub => (
                 <tr key={sub.id} className="hover:bg-zinc-900/50">
-                  <td className="p-4 font-medium text-white text-sm">{sub.student_id?.substring(0, 8)}…</td>
+                  <td className="p-4">
+                    <p className="font-bold text-white text-sm">{sub.student_name || 'Student'}</p>
+                    <p className="text-[10px] text-zinc-600 font-mono">{String(sub.student_id || '').substring(0, 8)}…</p>
+                  </td>
+                  <td className="p-4 max-w-[180px]">
+                    {sub.content
+                      ? <p className="text-xs text-zinc-400 truncate" title={sub.content}>{sub.content}</p>
+                      : <span className="text-[10px] text-zinc-600 italic">File only</span>
+                    }
+                    {sub.file_url && (
+                      <a href={sub.file_url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-1">
+                        <FileText size={10} /> View file
+                      </a>
+                    )}
+                  </td>
                   <td className="p-4 text-zinc-400 text-xs">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : '—'}</td>
                   <td className="p-4">
                     <input type="number" min="0" className="w-24 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:border-blue-500"
@@ -637,6 +901,64 @@ function DiscussionsTab({ courseId }) {
 // ---------------------------------------------------------------------------
 // Main Faculty Course Board
 // ---------------------------------------------------------------------------
+// Tab: Exams & Quizzes
+// ---------------------------------------------------------------------------
+function ExamsTab({ courseId }) {
+  const [exams, setExams] = useState([]);
+  const [examForm, setExamForm] = useState({ exam_type: 'quiz', exam_date: '', start_time: '', duration_minutes: 30, venue: '', weightage: 5 });
+  const [msg, setMsg] = useState({});
+
+  useEffect(() => {
+    api.get(`${ACADEMIC}/courses/${courseId}/exams/`).then(r => setExams(r.data)).catch(() => {});
+  }, [courseId]);
+
+  const handleScheduleExam = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`${ACADEMIC}/courses/${courseId}/exams/`, examForm);
+      setMsg({ type: 'success', text: 'Quiz scheduled successfully!' });
+      api.get(`${ACADEMIC}/courses/${courseId}/exams/`).then(r => setExams(r.data));
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Failed to schedule quiz.' });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleScheduleExam} className="bg-zinc-950 border border-zinc-800 p-6 rounded-2xl space-y-4">
+        <h3 className="text-white font-bold text-lg flex items-center gap-2"><Clock size={18} className="text-blue-500" /> Schedule Quiz</h3>
+        <p className="text-xs text-zinc-500">Note: Mid & End Semester exams are scheduled heavily by Admins.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className={labelClass}>Date</label><input required type="date" className={inputClass} value={examForm.exam_date} onChange={e=>setExamForm({...examForm, exam_date: e.target.value})} /></div>
+          <div><label className={labelClass}>Start Time</label><input required type="time" className={inputClass} value={examForm.start_time} onChange={e=>setExamForm({...examForm, start_time: e.target.value})} /></div>
+          <div><label className={labelClass}>Duration (mins)</label><input required type="number" className={inputClass} value={examForm.duration_minutes} onChange={e=>setExamForm({...examForm, duration_minutes: e.target.value})} /></div>
+          <div><label className={labelClass}>Weightage (%)</label><input required type="number" className={inputClass} value={examForm.weightage} onChange={e=>setExamForm({...examForm, weightage: e.target.value})} /></div>
+          <div className="col-span-2"><label className={labelClass}>Venue (Optional)</label><input className={inputClass} value={examForm.venue} placeholder="e.g. Online / L1" onChange={e=>setExamForm({...examForm, venue: e.target.value})} /></div>
+        </div>
+        <Feedback msg={msg} />
+        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-black px-6 py-2.5 rounded-xl transition-all">Schedule Quiz</button>
+      </form>
+
+      <div className="space-y-3">
+        <h3 className="text-white font-bold mt-8 mb-2">Current Schedule</h3>
+        {exams.length === 0 && <p className="text-zinc-500 text-sm">No exams or quizzes scheduled.</p>}
+        {exams.map(e => (
+          <div key={e.id} className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl flex justify-between items-center">
+            <div>
+              <p className="text-white font-bold tracking-wide capitalize">{e.exam_type.replace('_', ' ')}</p>
+              <p className="text-zinc-400 text-xs mt-1">{e.exam_date} at {e.start_time} · {e.duration_minutes} mins</p>
+            </div>
+            <div className="text-right">
+              <span className="block text-blue-400 font-black text-sm">{e.weightage}%</span>
+              <span className="text-zinc-600 text-[10px] uppercase">Weightage</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function FacultyCourseBoard() {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -664,6 +986,7 @@ export default function FacultyCourseBoard() {
     { id: 'announcements', icon: Megaphone, label: 'Announcements' },
     { id: 'resources', icon: BookOpen, label: 'Resources' },
     { id: 'attendance', icon: UserCheck, label: 'Attendance' },
+    { id: 'exams', icon: Clock, label: 'Exams & Quizzes' },
     { id: 'marks', icon: BarChart2, label: 'Marks & Assessments' },
     { id: 'discussions', icon: MessageSquare, label: 'Discussions' },
   ];
@@ -712,6 +1035,7 @@ export default function FacultyCourseBoard() {
           {activeTab === 'announcements' && <AnnouncementsTab courseId={courseId} />}
           {activeTab === 'resources' && <ResourcesTab courseId={courseId} />}
           {activeTab === 'attendance' && <AttendanceTab courseId={courseId} />}
+          {activeTab === 'exams' && <ExamsTab courseId={courseId} />}
           {activeTab === 'marks' && <MarksTab courseId={courseId} />}
           {activeTab === 'discussions' && <DiscussionsTab courseId={courseId} />}
         </div>

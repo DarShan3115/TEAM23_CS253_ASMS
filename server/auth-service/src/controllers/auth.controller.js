@@ -19,14 +19,25 @@ const isIITKEmail = (email) => typeof email === 'string' && email.toLowerCase().
 const genOTP = () => randomInt(100000, 1000000).toString();
 
 /** Issue both JWTs; stores refresh token in HttpOnly cookie */
+// ── Startup Guard ─────────────────────────────────────────────────────────────
+// Crash immediately if secrets are missing — far safer than signing with a
+// predictable fallback that any attacker can forge tokens against.
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+    console.error('FATAL: JWT_SECRET and JWT_REFRESH_SECRET must be set in the environment.');
+    process.exit(1);
+}
+
+const JWT_SECRET         = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
 function issueTokens(user, res) {
     const payload = { id: user.id, role: user.role };
     
     // Dynamic Expiry: Admins get 15m strictly, Students/Faculty get 1h
     const tokenLife = user.role === 'admin' ? '15m' : '1h';
     
-    const accessToken  = jwt.sign(payload, process.env.JWT_SECRET        || 'secret',         { expiresIn: tokenLife });
-    const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET || 'refresh_secret', { expiresIn: '7d'  });
+    const accessToken  = jwt.sign(payload, JWT_SECRET,         { expiresIn: tokenLife });
+    const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d'  });
     res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure:   process.env.NODE_ENV === 'production',
@@ -35,138 +46,6 @@ function issueTokens(user, res) {
     });
     return accessToken;
 }
-
-// ── CHECK IF USER EXISTS (FOR REAL-TIME UI VALIDATION) ────────────────────────
-exports.checkExists = async (req, res) => {
-    let { email, phone } = req.query;
-    
-    try {
-        if (!email && !phone) return res.json({ exists: false });
-
-        const params = [];
-        const conditions = [];
-
-        if (email) {
-            params.push(email.trim().toLowerCase());
-            conditions.push(`email ILIKE $${params.length}`);
-        }
-        if (phone) {
-            params.push(phone.trim());
-            conditions.push(`phone = $${params.length}`);
-        }
-
-        const exists = await query(`SELECT id FROM users WHERE ${conditions.join(' OR ')}`, params);
-        if (exists.rows.length > 0) {
-            return res.json({ exists: true, message: 'An account with this email or phone number already exists.' });
-        }
-        res.json({ exists: false });
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ error: 'Failed to check availability.' });
-    }
-};
-
-// ── SEND REGISTRATION OTP ─────────────────────────────────────────────────────
-exports.sendOtp = async (req, res) => {
-    let { email, phone } = req.body;
-    try {
-        if (!email || !phone) {
-            return res.status(400).json({ error: 'Email and phone are required.' });
-        }
-
-        email = email.trim().toLowerCase();
-        phone = phone.trim();
-
-        // ── Enforce iitk.ac.in domain ──
-        if (!isIITKEmail(email)) {
-            return res.status(400).json({ error: 'Only iitk.ac.in email addresses are permitted.' });
-        }
-
-        // ── Early Duplicate Check ──
-        const exists = await query('SELECT id FROM users WHERE email ILIKE $1 OR phone = $2', [email, phone]);
-        if (exists.rows.length > 0) {
-            return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
-        }
-
-        const emailOtp = genOTP();
-        const phoneOtp = genOTP();
-        const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-
-        otpStore.set(email, { otp: emailOtp, expiresAt });
-        otpStore.set(phone, { otp: phoneOtp, expiresAt });
-
-        // ── Send via messaging service (real or mock) ──
-        await Promise.all([
-            sendEmail(
-                email,
-                'ASMS Registration — Email Verification',
-                `Your email verification OTP is: ${emailOtp}. Valid for 5 minutes.`,
-                otpEmailHtml(emailOtp, 'Email Verification')
-            ),
-            sendSMS(phone, `ASMS IIT Kanpur: Your phone verification OTP is ${phoneOtp}. Valid for 5 minutes. Do not share.`),
-        ]);
-
-        res.json({ message: 'Verification codes sent to your email and phone.' });
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ error: `Failed to send OTPs: ${err.message}` });
-    }
-};
-
-// ── USER REGISTRATION ─────────────────────────────────────────────────────────
-exports.register = async (req, res) => {
-    let { first_name, last_name, email, password, role, phone, emailOtp, phoneOtp } = req.body;
-
-    try {
-        email = email.trim().toLowerCase();
-        phone = phone.trim();
-
-        // ── Enforce iitk.ac.in domain (server-side) ──
-        if (!isIITKEmail(email)) {
-            return res.status(400).json({ error: 'Only iitk.ac.in email addresses are permitted.' });
-        }
-
-        // ── Block faculty/admin self-registration ──
-        if (role && (role === 'faculty' || role === 'admin')) {
-            return res.status(403).json({ error: 'Faculty and admin accounts must be created by a system administrator.' });
-        }
-
-        // ── Verify OTPs ──
-        const storedEmail = otpStore.get(email);
-        const storedPhone = otpStore.get(phone);
-
-        if (!storedEmail || storedEmail.expiresAt < Date.now() || storedEmail.otp !== emailOtp) {
-            return res.status(400).json({ error: 'Invalid or expired email OTP.' });
-        }
-        if (!storedPhone || storedPhone.expiresAt < Date.now() || storedPhone.otp !== phoneOtp) {
-            return res.status(400).json({ error: 'Invalid or expired phone OTP.' });
-        }
-
-        // ── Duplicate check ──
-        const exists = await query('SELECT id FROM users WHERE email ILIKE $1 OR phone = $2', [email, phone]);
-        if (exists.rows.length > 0) {
-            return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
-        }
-
-        // ── Create user — always 'student' on public registration ──
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await query(
-            `INSERT INTO users (first_name, last_name, email, password_hash, role, phone)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id, email, first_name, last_name, role, phone, avatar_url, created_at`,
-            [first_name, last_name, email, hashedPassword, 'student', phone]
-        );
-
-        otpStore.delete(email);
-        otpStore.delete(phone);
-
-        const token = issueTokens(newUser.rows[0], res);
-        res.json({ token, user: newUser.rows[0] });
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ error: `Registration failed: ${err.message}` });
-    }
-};
 
 // ── USER LOGIN ────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
@@ -294,7 +173,7 @@ exports.refreshToken = async (req, res) => {
     if (!refreshToken) return res.status(401).json({ error: 'No refresh token provided.' });
 
     try {
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'refresh_secret');
+        const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
         const userResult = await query('SELECT * FROM users WHERE id = $1', [decoded.id]);
         if (userResult.rows.length === 0) {
             return res.status(401).json({ error: 'User no longer exists.' });

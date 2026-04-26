@@ -1,7 +1,93 @@
 const { query } = require('../config/db');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { otpStore } = require('../config/otpStore');
 const { sendEmail, welcomeEmailHtml } = require('../config/messaging');
+
+function generateUniquePassword(existingSet, length = 16) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
+    let password;
+    do {
+        password = Array.from(crypto.randomFillSync(new Uint32Array(length)))
+            .map((x) => chars[x % chars.length])
+            .join('');
+    } while (existingSet.has(password));
+    existingSet.add(password);
+    return password;
+}
+
+exports.bulkGenerateUsers = async (req, res) => {
+    const { users } = req.body;
+    if (!users || !Array.isArray(users)) return res.status(400).json({ message: 'List of users is required.' });
+
+    try {
+        const generated = [];
+        const existingPasswords = new Set();
+        
+        for (const u of users) {
+            const exists = await query('SELECT id FROM users WHERE email = $1', [u.email]);
+            if (exists.rows.length > 0) continue;
+
+            const pwd = generateUniquePassword(existingPasswords, 16);
+            const password_hash = await bcrypt.hash(pwd, 10);
+            
+            const result = await query(
+                'INSERT INTO users (email, password_hash, first_name, last_name, role, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, first_name, last_name, role',
+                [u.email, password_hash, u.first_name, u.last_name, u.role || 'student', u.phone || null]
+            );
+            
+            generated.push({ ...result.rows[0], plain_password: pwd });
+        }
+        res.json({ message: `Successfully generated ${generated.length} accounts.`, accounts: generated });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error generating accounts.' });
+    }
+};
+
+exports.broadcastAnnouncement = async (req, res) => {
+    const { title, body, targetType, targets } = req.body;
+    // targetType: 'all', 'manual_list', 'course', 'individual'
+    
+    if (!title || !body) return res.status(400).json({ message: 'Title and body required.' });
+
+    try {
+        let recipientEmails = new Set();
+        
+        if (targetType === 'all') {
+            const users = await query("SELECT email FROM users WHERE is_active = true");
+            users.rows.forEach(u => recipientEmails.add(u.email));
+        } else if (targetType === 'manual_list' || targetType === 'individual') {
+            (targets || []).forEach(e => recipientEmails.add(e.trim().toLowerCase()));
+        } else if (targetType === 'course') {
+            for (const code of targets) {
+                const enrolls = await query(`
+                    SELECT u.email FROM enrollments e
+                    JOIN courses c ON e.course_id = c.id
+                    JOIN users u ON e.student_id = u.id
+                    WHERE c.code ILIKE $1
+                `, [code]);
+                enrolls.rows.forEach(u => recipientEmails.add(u.email));
+            }
+        }
+
+        // Send actual broadcast emails
+        if (recipientEmails.size > 0) {
+            // Note: In production you would chunk these or use a background worker
+            const emailList = Array.from(recipientEmails).join(',');
+            await sendEmail(emailList, `Announcement: ${title}`, body, `<h3>${title}</h3><p>${body}</p>`);
+        }
+
+        // Also save to generic notices table for dashboard persistence
+        await query(`INSERT INTO notices (title, body, author_id, target_role) VALUES ($1, $2, $3, $4)`, 
+                    [title, body, req.user.id, targetType === 'all' ? 'all' : 'specific']);
+
+        res.json({ message: `Announcement broadcast deployed to ${recipientEmails.size} recipients.` });
+    } catch (err) {
+        console.error('Broadcast Error:', err);
+        res.status(500).json({ message: 'Failed to deploy announcement broadcast.' });
+    }
+};
 
 // --- List all users (with optional role filter) ---
 exports.listUsers = async (req, res) => {
@@ -144,8 +230,13 @@ exports.getPlatformStats = async (req, res) => {
 // --- Reset a user's password (admin override, no OTP needed) ---
 exports.adminResetPassword = async (req, res) => {
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 8) {
-        return res.status(400).json({ message: 'New password must be at least 8 characters.' });
+    if (!newPassword) {
+        return res.status(400).json({ message: 'New password is required.' });
+    }
+    // Enforce the same strength policy as user-initiated password changes
+    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!pwdRegex.test(newPassword)) {
+        return res.status(400).json({ message: 'Password must be 8+ characters with uppercase, lowercase, number, and special character.' });
     }
     try {
         const hash = await bcrypt.hash(newPassword, 10);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldAlert, Users, Plus, Trash2, Edit3, Search, RefreshCcw,
   CheckCircle, AlertCircle, UserX, UserCheck, Lock, KeyRound,
-  Database, Server, BarChart2, Building2, X
+  Database, Server, BarChart2, Building2, X, Award
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -160,6 +160,189 @@ function ResetPasswordModal({ userId, onClose }) {
   );
 }
 
+// Gradesheet Modal
+function GradesheetModal({ studentId, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/api/academic/students/${studentId}/gradesheet/`)
+      .then(r => setData(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [studentId]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="p-6 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2"><Award size={20} className="text-green-400"/> Student Transcript</h3>
+            {data && <p className="text-zinc-400 text-sm mt-1">{data.student.first_name} {data.student.last_name} ({data.student.email})</p>}
+          </div>
+          <div className="text-right flex items-center gap-6">
+             {data && <div className="text-right">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold">Total CPI</p>
+                <p className="text-3xl font-black text-green-400 leading-none">{data.cpi.toFixed(2)}</p>
+             </div>}
+             <button onClick={onClose} className="bg-zinc-800 hover:bg-zinc-700 p-2 rounded-xl text-zinc-400 hover:text-white transition-all"><X size={20} /></button>
+          </div>
+        </div>
+        
+        <div className="p-6 overflow-y-auto space-y-8 bg-zinc-950">
+          {loading ? (
+             <div className="text-center text-zinc-500 p-12 animate-pulse">Computing Academic Records...</div>
+          ) : !data ? (
+             <div className="text-center text-red-500 p-12 border border-red-900/30 bg-red-900/10 rounded-2xl">Failed to load transcript.</div>
+          ) : data.transcripts.length === 0 ? (
+             <div className="text-center text-zinc-500 p-12 border border-zinc-800 border-dashed rounded-2xl">No officially graded courses on record.</div>
+          ) : (
+            <div className="space-y-8">
+              {/* SPI History */}
+              <div>
+                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 border-b border-zinc-800/50 pb-2">Semester Performance Index (SPI)</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {data.spi_history.map(s => (
+                    <div key={s.semester} className="bg-blue-900/10 border border-blue-800/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                       <p className="text-blue-400/80 text-[10px] font-bold uppercase tracking-widest">{s.semester}</p>
+                       <p className="text-2xl font-black text-blue-400 mt-0.5">{s.spi.toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Transcripts grouping by semester automatically (already sorted) */}
+              <div>
+                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 border-b border-zinc-800/50 pb-2">Completed Course Grades</h4>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-zinc-500 text-[10px] uppercase font-black tracking-widest bg-zinc-900/80 border-b border-zinc-800">
+                      <tr>
+                        <th className="p-4">Semester</th>
+                        <th className="p-4">Code</th>
+                        <th className="p-4">Course Details</th>
+                        <th className="p-4 text-center">Credits</th>
+                        <th className="p-4 text-right">Final Grade</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/50">
+                      {data.transcripts.map((t, idx) => (
+                         <tr key={idx} className="hover:bg-zinc-800/30 transition-colors">
+                           <td className="p-4 text-white font-mono text-xs opacity-60 bg-zinc-900/20 border-r border-zinc-800/30">{t.semester}</td>
+                           <td className="p-4 font-bold text-blue-400">{t.code}</td>
+                           <td className="p-4 text-white font-medium">{t.title}</td>
+                           <td className="p-4 text-center text-zinc-500 font-mono">{t.credits}</td>
+                           <td className="p-4 text-right">
+                             <span className="inline-block px-3 py-1 bg-green-900/20 border border-green-800/40 text-green-400 font-black rounded-lg">{t.grade}</span>
+                           </td>
+                         </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin Courses & Exams Tab
+// ---------------------------------------------------------------------------
+function AdminCoursesTab() {
+  const [courses, setCourses] = useState([]);
+  const [faculty, setFaculty] = useState([]);
+  const [courseForm, setCourseForm] = useState({ code: '', title: '', description: '', credits: 3, instructor_id: '' });
+  const [examForm, setExamForm] = useState({ course_id: '', exam_type: 'mid_sem', exam_date: '', start_time: '', duration_minutes: 120, venue: '', weightage: 30 });
+  const [msg, setMsg] = useState({});
+
+  useEffect(() => {
+    api.get('/api/academic/courses/').then(r => setCourses(r.data)).catch(() => {});
+    api.get('/api/admin/users', { params: { role: 'faculty' } }).then(r => setFaculty(r.data)).catch(() => {});
+  }, []);
+
+  const handleCreateCourse = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api.post('/api/academic/admin/courses/', courseForm);
+      setCourses([...courses, res.data.course]);
+      setMsg({ type: 'success', text: 'Course created successfully!' });
+      setCourseForm({ code: '', title: '', description: '', credits: 3, instructor_id: '' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Failed to create course.' });
+    }
+  };
+
+  const handleScheduleExam = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/api/academic/courses/${examForm.course_id}/exams/`, examForm);
+      setMsg({ type: 'success', text: 'Exam scheduled successfully!' });
+      setExamForm({ ...examForm, exam_date: '', start_time: '', venue: '' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Failed to schedule exam.' });
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <Feedback msg={msg} />
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <form onSubmit={handleCreateCourse} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4">
+          <h2 className="text-xl font-black text-white flex items-center gap-2"><Building2 className="text-blue-500" /> Create New Course</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={labelClass}>Course Code</label><input required className={inputClass} value={courseForm.code} onChange={e=>setCourseForm({...courseForm, code: e.target.value})} placeholder="CS101" /></div>
+            <div><label className={labelClass}>Credits</label><input type="number" required className={inputClass} value={courseForm.credits} onChange={e=>setCourseForm({...courseForm, credits: e.target.value})} /></div>
+          </div>
+          <div><label className={labelClass}>Course Title</label><input required className={inputClass} value={courseForm.title} onChange={e=>setCourseForm({...courseForm, title: e.target.value})} placeholder="Intro to Computer Science" /></div>
+          <div>
+            <label className={labelClass}>Assign Professor</label>
+            <select className={inputClass} value={courseForm.instructor_id} onChange={e=>setCourseForm({...courseForm, instructor_id: e.target.value})}>
+              <option value="">-- No Instructor (TBA) --</option>
+              {faculty.map(f => <option key={f.id} value={f.id}>{f.first_name} {f.last_name} ({f.email})</option>)}
+            </select>
+          </div>
+          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-white transition-all">Create Course</button>
+        </form>
+
+        <form onSubmit={handleScheduleExam} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4">
+          <h2 className="text-xl font-black text-white flex items-center gap-2"><AlertCircle className="text-amber-500" /> Major Exam Scheduler</h2>
+          <div>
+            <label className={labelClass}>Select Course</label>
+            <select required className={inputClass} value={examForm.course_id} onChange={e=>setExamForm({...examForm, course_id: e.target.value})}>
+              <option value="">-- Choose Course --</option>
+              {courses.map(c => <option key={c.id} value={c.id}>{c.code} - {c.title}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Exam Type</label>
+              <select className={inputClass} value={examForm.exam_type} onChange={e=>setExamForm({...examForm, exam_type: e.target.value})}>
+                <option value="mid_sem">Mid Semester Exam</option>
+                <option value="end_sem">End Semester Exam</option>
+              </select>
+            </div>
+            <div><label className={labelClass}>Weightage (%)</label><input required type="number" className={inputClass} value={examForm.weightage} onChange={e=>setExamForm({...examForm, weightage: e.target.value})} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={labelClass}>Date</label><input required type="date" className={inputClass} value={examForm.exam_date} onChange={e=>setExamForm({...examForm, exam_date: e.target.value})} /></div>
+            <div><label className={labelClass}>Start Time</label><input required type="time" className={inputClass} value={examForm.start_time} onChange={e=>setExamForm({...examForm, start_time: e.target.value})} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={labelClass}>Duration (mins)</label><input required type="number" className={inputClass} value={examForm.duration_minutes} onChange={e=>setExamForm({...examForm, duration_minutes: e.target.value})} /></div>
+            <div><label className={labelClass}>Venue</label><input required className={inputClass} value={examForm.venue} placeholder="e.g. L1" onChange={e=>setExamForm({...examForm, venue: e.target.value})} /></div>
+          </div>
+          <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 py-3 rounded-xl font-bold text-white transition-all">Schedule Exam</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Admin Control Panel
 // ---------------------------------------------------------------------------
@@ -179,7 +362,7 @@ export default function AdminControlPanel() {
     { name: 'auth-service',         url: '/api/auth', port: 5001 },
     { name: 'academic-service',     url: '/api/academic/courses/', port: 8000 },
     { name: 'analytics-service',    url: '/api/analytics/student/overview', port: 8001 },
-    { name: 'productivity-service', url: '/api/v1/ping', port: 8080 },
+    { name: 'productivity-service', url: '/api/productivity/v1/ping', port: 8080 },
   ];
 
   const fetchUsers = useCallback(async () => {
@@ -190,13 +373,9 @@ export default function AdminControlPanel() {
       if (search) params.search = search;
       const res = await api.get('/api/admin/users', { params });
       setUsers(res.data || []);
-    } catch {
-      // Fallback mock
-      setUsers([
-        { id: '1', first_name: 'System', last_name: 'Admin', email: 'admin@asms.edu', role: 'admin', created_at: new Date().toISOString() },
-        { id: '2', first_name: 'Prof. John', last_name: 'Smith', email: 'faculty@asms.edu', role: 'faculty', created_at: new Date().toISOString() },
-        { id: '3', first_name: 'Jane', last_name: 'Doe', email: 'student@asms.edu', role: 'student', created_at: new Date().toISOString() },
-      ]);
+    } catch (err) {
+      console.error("Failed to fetch live admin users", err);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -284,9 +463,10 @@ export default function AdminControlPanel() {
   const isLocked = (u) => u.locked_until && new Date(u.locked_until) > new Date();
 
   const TABS = [
-    { id: 'users',  icon: Users,     label: 'User Management' },
-    { id: 'stats',  icon: BarChart2, label: 'Platform Stats' },
-    { id: 'system', icon: Server,    label: 'System Health' },
+    { id: 'users',   icon: Users,     label: 'User Management' },
+    { id: 'courses', icon: Building2, label: 'Course & Exam Setup' },
+    { id: 'stats',   icon: BarChart2, label: 'Platform Stats' },
+    { id: 'system',  icon: Server,    label: 'System Health' },
   ];
 
   return (
@@ -295,6 +475,7 @@ export default function AdminControlPanel() {
       {modal?.type === 'create' && <UserModal onClose={() => setModal(null)} onSave={handleModalSave} />}
       {modal?.type === 'edit'   && <UserModal user={modal.user} onClose={() => setModal(null)} onSave={handleModalSave} />}
       {modal?.type === 'reset'  && <ResetPasswordModal userId={modal.userId} onClose={() => setModal(null)} />}
+      {modal?.type === 'gradesheet'  && <GradesheetModal studentId={modal.studentId} onClose={() => setModal(null)} />}
 
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-zinc-800 pb-6">
@@ -323,6 +504,9 @@ export default function AdminControlPanel() {
           {actionMsg.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />} {actionMsg.text}
         </div>
       )}
+
+      {/* ── COURSE & EXAM MANAGEMENT ── */}
+      {activeTab === 'courses' && <AdminCoursesTab />}
 
       {/* ── USER MANAGEMENT ── */}
       {activeTab === 'users' && (
@@ -407,6 +591,11 @@ export default function AdminControlPanel() {
                         {/* Reset Password */}
                         <button onClick={() => setModal({ type: 'reset', userId: u.id })} title="Reset password"
                           className="p-1.5 hover:bg-amber-600/20 text-zinc-500 hover:text-amber-400 rounded-lg transition-all"><KeyRound size={14} /></button>
+                        {/* Gradesheet */}
+                        {u.role === 'student' && (
+                          <button onClick={() => setModal({ type: 'gradesheet', studentId: u.id })} title="View Academic Transcript"
+                            className="p-1.5 hover:bg-green-600/20 text-zinc-500 hover:text-green-400 rounded-lg transition-all"><Award size={14} /></button>
+                        )}
                         {/* Delete (not self) */}
                         {u.id !== currentAdmin?.id && (
                           <button onClick={() => handleDelete(u.id)} title="Delete account"

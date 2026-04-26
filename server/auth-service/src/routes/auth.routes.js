@@ -5,9 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { query } = require('../config/db');
 
 // Public Routes
-router.post('/register', authController.register);
 router.post('/login', authController.login);
-router.post('/send-otp', authController.sendOtp);
 router.post('/forgot-password/request', authController.forgotPasswordRequest);
 router.post('/forgot-password/reset', authController.resetPassword);
 router.post('/refresh-token', authController.refreshToken);

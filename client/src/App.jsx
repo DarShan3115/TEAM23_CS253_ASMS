@@ -20,7 +20,6 @@ import TasksPage from './pages/TasksPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
 import AcademicProgressPage from './pages/AcademicProgressPage';
-import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import MainLayout from './layouts/MainLayout';
 import TimetablePage from './pages/TimetablePage';
@@ -73,7 +72,6 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/login" element={!token ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/register" element={!token ? <RegisterPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="/forgot-password" element={!token ? <ForgotPasswordPage /> : <Navigate to="/dashboard" replace />} />
 
         <Route path="/dashboard" element={<ProtectedRoute><MainLayout><DashboardPage /></MainLayout></ProtectedRoute>} />
