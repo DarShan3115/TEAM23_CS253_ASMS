@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { 
   CheckCircle, Clock, User, FileText, Send, 
   ChevronLeft, Award, Loader2 
 } from 'lucide-react';
 
-const PRODUCTIVITY_API = 'http://localhost:8080/api/v1';
+const PRODUCTIVITY_API = '/api/productivity/v1';
 
 export default function FacultyGradingPage({ assignmentId, onBack }) {
   const [submissions, setSubmissions] = useState([]);
@@ -16,7 +16,7 @@ export default function FacultyGradingPage({ assignmentId, onBack }) {
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
-        const res = await axios.get(`${PRODUCTIVITY_API}/assignments/${assignmentId}/submissions`);
+        const res = await api.get(`${PRODUCTIVITY_API}/assignments/${assignmentId}/submissions`);
         setSubmissions(res.data);
       } catch (err) {
         console.error("Failed to load submissions");
@@ -30,16 +30,9 @@ export default function FacultyGradingPage({ assignmentId, onBack }) {
   const handleGradeSubmit = async () => {
     if (!selectedSub) return;
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user'));
-      await axios.put(`${PRODUCTIVITY_API}/submissions/${selectedSub.id}/grade`, {
+      await api.put(`${PRODUCTIVITY_API}/submissions/${selectedSub.id}/grade`, {
         grade: parseFloat(gradeInput.grade),
         feedback: gradeInput.feedback
-      }, {
-        headers: { 
-          'x-auth-token': token, 
-          'x-user-id': user?.id 
-        }
       });
       setSubmissions(submissions.map(s => 
         s.id === selectedSub.id ? { ...s, grade: gradeInput.grade, feedback: gradeInput.feedback } : s

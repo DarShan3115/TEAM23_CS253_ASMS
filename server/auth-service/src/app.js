@@ -52,6 +52,7 @@ app.use('/api', generalLimiter);
 app.use('/api/auth/send-otp', authLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/check-exists', authLimiter); // Prevent email/phone enumeration
 app.use('/api/users/send-change-otp', authLimiter);
 
 // Routes

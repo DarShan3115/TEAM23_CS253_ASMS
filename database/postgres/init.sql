@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
 );
 
 -- ── Assignments ─────────────────────────────────────────────────────────────
+-- Assignments stay forever (submissions FK is RESTRICT not CASCADE).
 CREATE TABLE IF NOT EXISTS assignments (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -81,27 +82,35 @@ CREATE TABLE IF NOT EXISTS assignments (
     due_date        TIMESTAMPTZ,
     max_marks       INTEGER      NOT NULL DEFAULT 100,
     weightage       INTEGER      NOT NULL DEFAULT 10, -- Marks overall weight out of 100%
+    file_url        TEXT,                            -- Optional instructor attachment (stored in /media/)
+    storage_url     TEXT,                            -- Optional remote server target for student uploads
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 -- ── Resources ───────────────────────────────────────────────────────────────
+-- Supports any document/image format uploaded by faculty (PDFs, slides, etc.).
 CREATE TABLE IF NOT EXISTS resources (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     uploader_id     UUID REFERENCES users(id) ON DELETE SET NULL,
     title           VARCHAR(255) NOT NULL,
-    resource_type   VARCHAR(20)  NOT NULL DEFAULT 'other' CHECK (resource_type IN ('lecture', 'other')),
+    resource_type   VARCHAR(30)  NOT NULL DEFAULT 'lecture',
+    file_name       VARCHAR(255),                     -- Original filename for display
     file_url        TEXT,
+    file_size       INTEGER,                          -- Size in bytes
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 -- ── Submissions ─────────────────────────────────────────────────────────────
+-- ON DELETE RESTRICT on assignment_id ensures assignments cannot be deleted
+-- while student submissions exist — preserving academic records permanently.
 CREATE TABLE IF NOT EXISTS submissions (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    assignment_id   UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+    assignment_id   UUID NOT NULL REFERENCES assignments(id) ON DELETE RESTRICT,
     student_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content         TEXT,
-    file_url        TEXT,
+    file_urls       TEXT[],    -- Array of uploaded file paths
+    file_url        TEXT,      -- Legacy single file (kept for backwards compat)
     marks           INTEGER,
     grade           NUMERIC,
     feedback        TEXT,
@@ -152,6 +161,19 @@ CREATE TABLE IF NOT EXISTS discussions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── Exams ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS exams (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id       UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    exam_type       VARCHAR(20) NOT NULL, -- 'quiz', 'mid_sem', 'end_sem'
+    exam_date       DATE NOT NULL,
+    start_time      TIME NOT NULL,
+    duration_minutes INTEGER DEFAULT 60,
+    venue           VARCHAR(255),
+    weightage       INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ── Tasks (Checklist) ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tasks (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -170,12 +192,15 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 -- ── Indexes ─────────────────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_users_email        ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_role         ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_email         ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role          ON users(role);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
 CREATE INDEX IF NOT EXISTS idx_enrollments_course  ON enrollments(course_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_course   ON attendance(course_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_assign  ON submissions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_student ON submissions(student_id);
+CREATE INDEX IF NOT EXISTS idx_resources_course    ON resources(course_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_course  ON assignments(course_id);
 
 -- ── 1. Base Users (Explicit UUIDs for relational mapping) ───────────────────
 INSERT INTO users (id, email, password_hash, first_name, last_name, role) VALUES 

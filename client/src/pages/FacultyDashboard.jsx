@@ -363,7 +363,7 @@ export default function FacultyDashboard() {
             </h2>
             <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3">
               <p className="text-xs text-zinc-400">Finalize and submit official semester grades for all your assigned courses.</p>
-              <button onClick={() => navigate('/faculty/grades')} className="w-full py-3 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2">
+              <button onClick={() => navigate('/faculty-hub')} className="w-full py-3 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2">
                 Open Grade Portal <ArrowRight size={14} />
               </button>
             </div>

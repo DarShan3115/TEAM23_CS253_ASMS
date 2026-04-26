@@ -38,15 +38,29 @@ func (h *SubmissionHandler) UpdateSubmissionGrade(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Grade updated successfully", "submission": submission})
 }
 
-// GetSubmissionsByAssignment returns all student work for a specific task
+// GetSubmissionsByAssignment returns all student work for a specific assignment,
+// enriched with the student's name from the shared users table.
 func (h *SubmissionHandler) GetSubmissionsByAssignment(c *gin.Context) {
 	assignmentID := c.Param("assignmentId")
 
-	var submissions []models.Submission
-	if err := h.DB.Where("assignment_id = ?", assignmentID).Find(&submissions).Error; err != nil {
+	type SubWithName struct {
+		models.Submission
+		StudentName string `json:"student_name"`
+	}
+
+	var results []SubWithName
+	err := h.DB.Raw(`
+		SELECT s.*, COALESCE(u.first_name || ' ' || u.last_name, 'Unknown Student') AS student_name
+		FROM submissions s
+		LEFT JOIN users u ON u.id = s.student_id
+		WHERE s.assignment_id = ?
+		ORDER BY s.submitted_at DESC
+	`, assignmentID).Scan(&results).Error
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch submissions"})
 		return
 	}
 
-	c.JSON(http.StatusOK, submissions)
+	c.JSON(http.StatusOK, results)
 }
